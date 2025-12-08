@@ -45,7 +45,7 @@ async fn create_wishlist_item(
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
     if wishlist.is_some() {
-        return Ok(CustomResponse::builder({})
+        return Ok(CustomResponse::<(), ()>::builder({})
             .message("Retreat added to wishlist successfully.")
             .status_code(StatusCode::CREATED)
             .build());
@@ -64,7 +64,7 @@ async fn create_wishlist_item(
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
     // Convert model to serializer
-    Ok(CustomResponse::builder({})
+    Ok(CustomResponse::<(), ()>::builder({})
         .message("Retreat added to wishlist successfully.")
         .status_code(StatusCode::CREATED)
         .build())
@@ -100,7 +100,7 @@ async fn delete_wishlist_item(
         .await
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
     // Convert model to serializer
-    Ok(CustomResponse::builder({})
+    Ok(CustomResponse::<(), ()>::builder({})
         .message("Retreat deleted from wishlist successfully.")
         .status_code(StatusCode::NO_CONTENT)
         .build())
@@ -120,7 +120,7 @@ async fn list_wishlist_items(
     // Convert model to serializer
     let serializers: Vec<ReadWishlistSerializer> =
         instances.into_iter().map(|model| model.into()).collect();
-    Ok(CustomResponse::builder(serializers).build())
+    Ok(CustomResponse::<Vec<ReadWishlistSerializer>, ()>::builder(serializers).build())
 }
 
 pub fn wishlist_router() -> Router<AppState> {

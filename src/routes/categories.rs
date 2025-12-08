@@ -39,7 +39,7 @@ async fn create_category(
         .try_into_model()
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
         .into();
-    Ok(CustomResponse::builder(serializer)
+    Ok(CustomResponse::<ReadCategorySerializer, ()>::builder(serializer)
         .message("Category created successfully.")
         .status_code(StatusCode::CREATED)
         .build())
@@ -54,7 +54,7 @@ async fn list_categories(State(state): State<AppState>) -> Result<Response<Body>
     // Convert model to serializer
     let serializers: Vec<ReadCategorySerializer> =
         instances.into_iter().map(|model| model.into()).collect();
-    Ok(CustomResponse::builder(serializers).build())
+    Ok(CustomResponse::<Vec<ReadCategorySerializer>, ()>::builder(serializers).build())
 }
 
 async fn get_category(
@@ -73,7 +73,7 @@ async fn get_category(
 
     // Convert model to serializer
     let serializer: ReadCategorySerializer = instance.into();
-    Ok(CustomResponse::builder(serializer).build())
+    Ok(CustomResponse::<ReadCategorySerializer, ()>::builder(serializer).build())
 }
 
 async fn update_category(
@@ -112,7 +112,7 @@ async fn update_category(
     let serializer: ReadCategorySerializer = instance.into();
 
     // Return success
-    Ok(CustomResponse::builder(serializer)
+    Ok(CustomResponse::<ReadCategorySerializer, ()>::builder(serializer)
         .message("Category updated successfully.")
         .status_code(StatusCode::OK)
         .build())
@@ -141,7 +141,7 @@ async fn delete_category(
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
     // Convert model to serializer
-    Ok(CustomResponse::builder({})
+    Ok(CustomResponse::<(), ()>::builder({})
         .message("Category deleted successfully.")
         .status_code(StatusCode::NO_CONTENT)
         .build())

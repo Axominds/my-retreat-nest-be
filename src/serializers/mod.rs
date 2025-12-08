@@ -6,3 +6,4 @@ pub mod retreat_reviews;
 pub mod retreats;
 pub mod users;
 pub mod wishlists;
+pub mod pagination;

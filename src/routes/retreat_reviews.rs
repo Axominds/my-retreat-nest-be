@@ -67,7 +67,7 @@ async fn create_retreat_review(
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
         .into();
 
-    Ok(CustomResponse::builder(serializer).build())
+    Ok(CustomResponse::<ReadRetreatReviewSerializer, ()>::builder(serializer).build())
 }
 
 async fn list_retreat_review(
@@ -94,7 +94,7 @@ async fn list_retreat_review(
     let serializers: Vec<ReadRetreatReviewSerializer> =
         instances.into_iter().map(|model| model.into()).collect();
 
-    Ok(CustomResponse::builder(serializers).build())
+    Ok(CustomResponse::<Vec<ReadRetreatReviewSerializer>, ()>::builder(serializers).build())
 }
 
 async fn update_retreat_review(
@@ -141,7 +141,7 @@ async fn update_retreat_review(
     // Convert to serializer
     let serializer: ReadRetreatReviewSerializer = instance.into();
 
-    Ok(CustomResponse::builder(serializer).build())
+    Ok(CustomResponse::<ReadRetreatReviewSerializer, ()>::builder(serializer).build())
 }
 
 async fn delete_retreat_review(
@@ -169,7 +169,7 @@ async fn delete_retreat_review(
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
     // Convert model to serializer
-    Ok(CustomResponse::builder({})
+    Ok(CustomResponse::<(), ()>::builder({})
         .message("Retreat review deleted successfully.")
         .status_code(StatusCode::NO_CONTENT)
         .build())

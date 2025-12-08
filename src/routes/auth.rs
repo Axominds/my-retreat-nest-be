@@ -38,7 +38,7 @@ async fn login(
         .map_err(|e| to_error_response(e, StatusCode::BAD_REQUEST))?;
 
     if !password_matched {
-        return Ok(CustomResponse::builder({})
+        return Ok(CustomResponse::<(), ()>::builder({})
             .message("Invalid Password!")
             .status_code(StatusCode::BAD_REQUEST)
             .build());
@@ -62,7 +62,7 @@ async fn login(
         refresh_token: refresh_token,
     };
 
-    Ok(CustomResponse::builder(serializer).build())
+    Ok(CustomResponse::<LoginResponseSerializer, ()>::builder(serializer).build())
 }
 
 async fn refresh(
@@ -105,7 +105,7 @@ async fn refresh(
         refresh_token: refresh_token.clone(),
     };
 
-    Ok(CustomResponse::builder(serializer).build())
+    Ok(CustomResponse::<LoginResponseSerializer, ()>::builder(serializer).build())
 }
 
 pub fn auth_router() -> Router<AppState> {

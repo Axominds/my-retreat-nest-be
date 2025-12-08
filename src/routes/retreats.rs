@@ -1,13 +1,12 @@
 use axum::{
     Json, Router,
     body::Body,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{Response, StatusCode},
     routing::{delete, get, patch, post},
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter,
-    TryIntoModel,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait, QueryFilter, QuerySelect, TryIntoModel
 };
 
 use validator::Validate;
@@ -18,10 +17,10 @@ use crate::{
         RetreatUserColumn, RetreatUserEntity, RetreatUserModel, UserActiveModel, UserColumn,
         UserEntity, UserModel,
     },
-    serializers::retreats::{
+    serializers::{pagination::{Pagination, PaginationMeta}, retreats::{
         CreateRetreatSerializer, CreateRetreatUserSerializer, ReadRetreatSerializer,
         UpdateRetreatSerializer, UpdateRetreatUserSerializer,
-    },
+    }},
     set_active_model_fields, set_fields,
     state::AppState,
     utils::{
@@ -61,22 +60,30 @@ async fn create_retreat(
         .try_into_model()
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
         .into();
-    Ok(CustomResponse::builder(serializer)
+    Ok(CustomResponse::<ReadRetreatSerializer, ()>::builder(serializer)
         .message("Retreat created successfully.")
         .status_code(StatusCode::CREATED)
         .build())
 }
 
-async fn list_retreats(State(state): State<AppState>) -> Result<Response<Body>, Response<Body>> {
+async fn list_retreats(State(state): State<AppState>, Query(pagination): Query<Pagination>) -> Result<Response<Body>, Response<Body>> {
     // Query a single record
+    let per_page: u64 = pagination.limit();
+    let page: u64 = pagination.page();
     let instances: Vec<RetreatModel> = RetreatEntity::find()
+        .limit(pagination.limit())
+        .offset(pagination.offset())
         .all(&state.database)
         .await
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
     // Convert model to serializer
     let serializers: Vec<ReadRetreatSerializer> =
         instances.into_iter().map(|model| model.into()).collect();
-    Ok(CustomResponse::builder(serializers).build())
+    
+    let total: u64 = RetreatEntity::find().count(&state.database).await.unwrap();
+    let total_pages = (total + per_page - 1) / per_page;
+    let pagination_meta = PaginationMeta::build(total, total_pages, per_page, page);
+    Ok(CustomResponse::<Vec<ReadRetreatSerializer>, PaginationMeta>::builder(serializers).meta(pagination_meta).build())
 }
 
 async fn get_retreat(
@@ -95,7 +102,7 @@ async fn get_retreat(
 
     // Convert model to serializer
     let serializer: ReadRetreatSerializer = instance.into();
-    Ok(CustomResponse::builder(serializer).build())
+    Ok(CustomResponse::<ReadRetreatSerializer, ()>::builder(serializer).build())
 }
 
 async fn update_retreat(
@@ -147,7 +154,7 @@ async fn update_retreat(
     let serializer: ReadRetreatSerializer = instance.into();
 
     // Return success
-    Ok(CustomResponse::builder(serializer)
+    Ok(CustomResponse::<ReadRetreatSerializer, ()>::builder(serializer)
         .message("Retreat updated successfully.")
         .status_code(StatusCode::OK)
         .build())
@@ -176,7 +183,7 @@ async fn delete_retreat(
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
     // Convert model to serializer
-    Ok(CustomResponse::builder({})
+    Ok(CustomResponse::<(), ()>::builder({})
         .message("Retreat deleted successfully.")
         .status_code(StatusCode::NO_CONTENT)
         .build())
@@ -207,7 +214,7 @@ async fn create_retreat_user(
     let user_id: i64 = if let Some(user) = user {
         if user.name != payload.name {
             // Early return: user exists with different name
-            return Ok(CustomResponse::builder({})
+            return Ok(CustomResponse::<(), ()>::builder({})
                 .message(&format!(
                     "User exists with a different name <strong>{}</strong>.",
                     user.name
@@ -252,7 +259,7 @@ async fn create_retreat_user(
         .await
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    Ok(CustomResponse::builder({})
+    Ok(CustomResponse::<(), ()>::builder({})
         .message("Staff added successfully.")
         .status_code(StatusCode::CREATED)
         .build())
@@ -290,7 +297,7 @@ async fn update_retreat_user(
 
     set_fields!(active_model, payload, role);
 
-    Ok(CustomResponse::builder({})
+    Ok(CustomResponse::<(), ()>::builder({})
         .message("Staff added successfully.")
         .status_code(StatusCode::CREATED)
         .build())
@@ -328,7 +335,7 @@ async fn delete_retreat_user(
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
     // Convert model to serializer
-    Ok(CustomResponse::builder({})
+    Ok(CustomResponse::<(), ()>::builder({})
         .message("Staff deleted successfully.")
         .status_code(StatusCode::NO_CONTENT)
         .build())

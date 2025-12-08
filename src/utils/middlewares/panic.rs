@@ -13,5 +13,5 @@ pub fn handle_panic(err: Box<dyn Any + Send + 'static>) -> Response<Body> {
         "Something went wrong."
     };
 
-    return CustomResponse::builder({}).message(message).status_code(StatusCode::INTERNAL_SERVER_ERROR).build();
+    return CustomResponse::<(), ()>::builder({}).message(message).status_code(StatusCode::INTERNAL_SERVER_ERROR).build();
 }

@@ -7,7 +7,7 @@ pub struct LoginSerializer{
     pub password: String
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct LoginResponseSerializer{
     pub access_token: String,
     pub refresh_token: String

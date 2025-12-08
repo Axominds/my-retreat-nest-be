@@ -24,7 +24,7 @@ use crate::{
     set_active_model_fields, set_fields,
     state::AppState,
     utils::{
-        extractors::auth::{AuthAdmin},
+        extractors::auth::AuthAdmin,
         response::{CustomResponse, to_error_response, to_error_response_with_message},
     },
 };
@@ -54,7 +54,7 @@ async fn create_gallery_category(
         .try_into_model()
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
         .into();
-    Ok(CustomResponse::builder(serializer)
+    Ok(CustomResponse::<ReadGalleryCategorySerializer, ()>::builder(serializer)
         .message("Gallery category created successfully.")
         .status_code(StatusCode::CREATED)
         .build())
@@ -71,7 +71,7 @@ async fn list_gallery_category(
     let serializers: Vec<ReadGalleryCategorySerializer> =
         instances.into_iter().map(|model| model.into()).collect();
 
-    Ok(CustomResponse::builder(serializers).build())
+    Ok(CustomResponse::<Vec<ReadGalleryCategorySerializer>, ()>::builder(serializers).build())
 }
 
 async fn update_gallery_category(
@@ -108,7 +108,7 @@ async fn update_gallery_category(
     // Convert to serializer
     let serializer: ReadGalleryCategorySerializer = instance.into();
 
-    Ok(CustomResponse::builder(serializer).build())
+    Ok(CustomResponse::<ReadGalleryCategorySerializer, ()>::builder(serializer).build())
 }
 
 async fn delete_gallery_category(
@@ -133,7 +133,7 @@ async fn delete_gallery_category(
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
     // Convert model to serializer
-    Ok(CustomResponse::builder({})
+    Ok(CustomResponse::<(), ()>::builder({})
         .message("Gallery category deleted successfully.")
         .status_code(StatusCode::NO_CONTENT)
         .build())

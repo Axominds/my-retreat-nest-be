@@ -107,7 +107,7 @@ async fn create_retreat_gallery(
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
         .into();
 
-    Ok(CustomResponse::builder(serializer)
+    Ok(CustomResponse::<ReadRetreatGallerySerializer, ()>::builder(serializer)
         .status_code(StatusCode::CREATED)
         .build())
 }
@@ -136,7 +136,7 @@ async fn list_retreat_gallery(
     let serializers: Vec<ReadRetreatGallerySerializer> =
         instances.into_iter().map(|model| model.into()).collect();
 
-    Ok(CustomResponse::builder(serializers).build())
+    Ok(CustomResponse::<Vec<ReadRetreatGallerySerializer>, ()>::builder(serializers).build())
 }
 
 async fn update_retreat_gallery(
@@ -216,7 +216,7 @@ async fn update_retreat_gallery(
     // Convert to serializer
     let serializer: ReadRetreatGallerySerializer = instance.into();
 
-    Ok(CustomResponse::builder(serializer).build())
+    Ok(CustomResponse::<ReadRetreatGallerySerializer, ()>::builder(serializer).build())
 }
 
 async fn delete_retreat_gallery(
@@ -247,7 +247,7 @@ async fn delete_retreat_gallery(
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
     // Convert model to serializer
-    Ok(CustomResponse::builder({})
+    Ok(CustomResponse::<(), ()>::builder({})
         .message("Retreat gallery deleted successfully.")
         .status_code(StatusCode::NO_CONTENT)
         .build())

@@ -53,7 +53,7 @@ async fn create_users(
         .try_into_model()
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
         .into();
-    Ok(CustomResponse::builder(serializer)
+    Ok(CustomResponse::<ReadUserSerializer, ()>::builder(serializer)
         .message("User created successfully.")
         .status_code(StatusCode::CREATED)
         .build())
@@ -68,7 +68,7 @@ async fn list_users(State(state): State<AppState>) -> Result<Response<Body>, Res
     // Convert model to serializer
     let serializers: Vec<ReadUserSerializer> =
         instances.into_iter().map(|model| model.into()).collect();
-    Ok(CustomResponse::builder(serializers).build())
+    Ok(CustomResponse::<Vec<ReadUserSerializer>, ()>::builder(serializers).build())
 }
 
 async fn get_user(
@@ -85,7 +85,7 @@ async fn get_user(
 
     // Convert model to serializer
     let serializer: ReadUserSerializer = instance.into();
-    Ok(CustomResponse::builder(serializer).build())
+    Ok(CustomResponse::<ReadUserSerializer, ()>::builder(serializer).build())
 }
 
 async fn update_user(
@@ -120,7 +120,7 @@ async fn update_user(
     let serializer: ReadUserSerializer = instance.into();
 
     // Return success
-    Ok(CustomResponse::builder(serializer)
+    Ok(CustomResponse::<ReadUserSerializer, ()>::builder(serializer)
         .message("User updated successfully.")
         .status_code(StatusCode::OK)
         .build())
@@ -147,7 +147,7 @@ async fn delete_user(
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
     // Convert model to serializer
-    Ok(CustomResponse::builder({})
+    Ok(CustomResponse::<(), ()>::builder({})
         .message("User deleted successfully.")
         .status_code(StatusCode::NO_CONTENT)
         .build())
