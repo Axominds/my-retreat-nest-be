@@ -1,11 +1,10 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Pagination {
     pub page: Option<u64>,
     pub page_size: Option<u64>,
 }
-
 
 impl Pagination {
     pub fn limit(&self) -> u64 {
@@ -30,16 +29,16 @@ pub struct PaginationMeta {
     total: u64,
     total_pages: u64,
     page_size: u64,
-    page: u64 
+    page: u64,
 }
 
 impl PaginationMeta {
     pub fn build(total: u64, total_pages: u64, page_size: u64, page: u64) -> PaginationMeta {
         PaginationMeta {
             total: total,
-        total_pages: total_pages,
-        page_size: page_size,
-        page: page 
+            total_pages: total_pages,
+            page_size: page_size,
+            page: page,
         }
     }
 }

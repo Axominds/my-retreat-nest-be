@@ -1,24 +1,29 @@
 use axum::{
     Json, Router,
     body::Body,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::Response,
     routing::{delete, get, patch, post},
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter,
-    TryIntoModel,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait,
+    QueryFilter, QuerySelect, TryIntoModel,
 };
 use validator::Validate;
 
 use crate::{
     entities_helper::{UserActiveModel, UserColumn, UserEntity, UserModel},
-    serializers::users::{CreateUserSerializer, ReadUserSerializer, UpdateUserSerializer},
+    serializers::{
+        pagination::{Pagination, PaginationMeta},
+        users::{CreateUserSerializer, ReadUserSerializer, UpdateUserSerializer},
+    },
     set_fields,
     state::AppState,
     utils::{
-        extractors::auth::AuthUser, password::create_password, response::{to_error_response, to_error_response_with_message, CustomResponse}
+        extractors::auth::AuthUser,
+        password::create_password,
+        response::{CustomResponse, to_error_response, to_error_response_with_message},
     },
 };
 
@@ -53,22 +58,40 @@ async fn create_users(
         .try_into_model()
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
         .into();
-    Ok(CustomResponse::<ReadUserSerializer, ()>::builder(serializer)
-        .message("User created successfully.")
-        .status_code(StatusCode::CREATED)
-        .build())
+    Ok(
+        CustomResponse::<ReadUserSerializer, ()>::builder(serializer)
+            .message("User created successfully.")
+            .status_code(StatusCode::CREATED)
+            .build(),
+    )
 }
 
-async fn list_users(State(state): State<AppState>) -> Result<Response<Body>, Response<Body>> {
+async fn list_users(
+    State(state): State<AppState>,
+    Query(pagination): Query<Pagination>,
+) -> Result<Response<Body>, Response<Body>> {
     // Query a single record
+    let page_size: u64 = pagination.limit();
     let instances: Vec<UserModel> = UserEntity::find()
+        .limit(page_size)
+        .offset(pagination.offset())
         .all(&state.database)
         .await
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
     // Convert model to serializer
     let serializers: Vec<ReadUserSerializer> =
         instances.into_iter().map(|model| model.into()).collect();
-    Ok(CustomResponse::<Vec<ReadUserSerializer>, ()>::builder(serializers).build())
+
+    let total: u64 = UserEntity::find().count(&state.database).await.unwrap();
+    let page: u64 = pagination.page();
+    let total_pages: u64 = (total + page_size - 1) / page_size;
+    let pagination_meta: PaginationMeta =
+        PaginationMeta::build(total, total_pages, page_size, page);
+    Ok(
+        CustomResponse::<Vec<ReadUserSerializer>, PaginationMeta>::builder(serializers)
+            .meta(pagination_meta)
+            .build(),
+    )
 }
 
 async fn get_user(
@@ -120,10 +143,12 @@ async fn update_user(
     let serializer: ReadUserSerializer = instance.into();
 
     // Return success
-    Ok(CustomResponse::<ReadUserSerializer, ()>::builder(serializer)
-        .message("User updated successfully.")
-        .status_code(StatusCode::OK)
-        .build())
+    Ok(
+        CustomResponse::<ReadUserSerializer, ()>::builder(serializer)
+            .message("User updated successfully.")
+            .status_code(StatusCode::OK)
+            .build(),
+    )
 }
 
 async fn delete_user(

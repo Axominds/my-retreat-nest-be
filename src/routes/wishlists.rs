@@ -1,12 +1,13 @@
 use axum::{
     Router,
     body::Body,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{Response, StatusCode},
     routing::{delete, get, post},
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait,
+    QueryFilter, QuerySelect,
 };
 
 use crate::{
@@ -14,7 +15,10 @@ use crate::{
         RetreatColumn, RetreatEntity, WishlistActiveModel, WishlistColumn, WishlistEntity,
         WishlistModel,
     },
-    serializers::wishlists::ReadWishlistSerializer,
+    serializers::{
+        pagination::{Pagination, PaginationMeta},
+        wishlists::ReadWishlistSerializer,
+    },
     state::AppState,
     utils::{
         extractors::auth::AuthUser,
@@ -109,10 +113,14 @@ async fn delete_wishlist_item(
 async fn list_wishlist_items(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
+    Query(pagination): Query<Pagination>,
 ) -> Result<Response<Body>, Response<Body>> {
     // Convert model to serializer
+    let page_size: u64 = pagination.limit();
     let instances: Vec<WishlistModel> = WishlistEntity::find()
         .filter(WishlistColumn::UserId.eq(user.user_id))
+        .limit(page_size)
+        .offset(pagination.offset())
         .all(&state.database)
         .await
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
@@ -120,7 +128,21 @@ async fn list_wishlist_items(
     // Convert model to serializer
     let serializers: Vec<ReadWishlistSerializer> =
         instances.into_iter().map(|model| model.into()).collect();
-    Ok(CustomResponse::<Vec<ReadWishlistSerializer>, ()>::builder(serializers).build())
+
+    let total: u64 = WishlistEntity::find()
+        .filter(WishlistColumn::UserId.eq(user.user_id))
+        .count(&state.database)
+        .await
+        .unwrap();
+    let page: u64 = pagination.page();
+    let total_pages: u64 = (total + page_size - 1) / page_size;
+    let pagination_meta: PaginationMeta =
+        PaginationMeta::build(total, total_pages, page_size, page);
+    Ok(
+        CustomResponse::<Vec<ReadWishlistSerializer>, PaginationMeta>::builder(serializers)
+            .meta(pagination_meta)
+            .build(),
+    )
 }
 
 pub fn wishlist_router() -> Router<AppState> {

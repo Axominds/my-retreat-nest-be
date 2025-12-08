@@ -3,14 +3,14 @@ use std::error::Error;
 use axum::{
     Router,
     body::{Body, Bytes},
-    extract::{Multipart, Path, State},
+    extract::{Multipart, Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::Response,
     routing::{delete, get, patch, post},
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter,
-    TryIntoModel,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait,
+    QueryFilter, QuerySelect, TryIntoModel,
 };
 
 use crate::{
@@ -19,7 +19,10 @@ use crate::{
         RetreatGalleriesActiveModel, RetreatGalleriesColumn, RetreatGalleriesEntity,
         RetreatGalleriesModel,
     },
-    serializers::retreat_galleries::ReadRetreatGallerySerializer,
+    serializers::{
+        pagination::{Pagination, PaginationMeta},
+        retreat_galleries::ReadRetreatGallerySerializer,
+    },
     state::AppState,
     utils::{
         extractors::auth::AuthUser,
@@ -107,14 +110,17 @@ async fn create_retreat_gallery(
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
         .into();
 
-    Ok(CustomResponse::<ReadRetreatGallerySerializer, ()>::builder(serializer)
-        .status_code(StatusCode::CREATED)
-        .build())
+    Ok(
+        CustomResponse::<ReadRetreatGallerySerializer, ()>::builder(serializer)
+            .status_code(StatusCode::CREATED)
+            .build(),
+    )
 }
 
 async fn list_retreat_gallery(
     State(state): State<AppState>,
     Path(retreat_id): Path<i64>,
+    Query(pagination): Query<Pagination>,
 ) -> Result<Response<Body>, Response<Body>> {
     // Find existing Retreat
     RetreatEntity::find()
@@ -126,8 +132,11 @@ async fn list_retreat_gallery(
             to_error_response_with_message("Retreat not found.", StatusCode::NOT_FOUND)
         })?;
 
+    let page_size: u64 = pagination.limit();
     let instances: Vec<RetreatGalleriesModel> = RetreatGalleriesEntity::find()
         .filter(RetreatGalleriesColumn::RetreatId.eq(retreat_id))
+        .limit(page_size)
+        .offset(pagination.offset())
         .all(&state.database)
         .await
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
@@ -136,7 +145,21 @@ async fn list_retreat_gallery(
     let serializers: Vec<ReadRetreatGallerySerializer> =
         instances.into_iter().map(|model| model.into()).collect();
 
-    Ok(CustomResponse::<Vec<ReadRetreatGallerySerializer>, ()>::builder(serializers).build())
+    let total: u64 = RetreatGalleriesEntity::find()
+        .filter(RetreatGalleriesColumn::RetreatId.eq(retreat_id))
+        .count(&state.database)
+        .await
+        .unwrap();
+    let page: u64 = pagination.page();
+    let total_pages: u64 = (total + page_size - 1) / page_size;
+    let pagination_meta: PaginationMeta =
+        PaginationMeta::build(total, total_pages, page_size, page);
+
+    Ok(
+        CustomResponse::<Vec<ReadRetreatGallerySerializer>, PaginationMeta>::builder(serializers)
+            .meta(pagination_meta)
+            .build(),
+    )
 }
 
 async fn update_retreat_gallery(

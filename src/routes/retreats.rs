@@ -68,10 +68,9 @@ async fn create_retreat(
 
 async fn list_retreats(State(state): State<AppState>, Query(pagination): Query<Pagination>) -> Result<Response<Body>, Response<Body>> {
     // Query a single record
-    let per_page: u64 = pagination.limit();
-    let page: u64 = pagination.page();
+    let page_size: u64 = pagination.limit();
     let instances: Vec<RetreatModel> = RetreatEntity::find()
-        .limit(pagination.limit())
+        .limit(page_size)
         .offset(pagination.offset())
         .all(&state.database)
         .await
@@ -81,8 +80,9 @@ async fn list_retreats(State(state): State<AppState>, Query(pagination): Query<P
         instances.into_iter().map(|model| model.into()).collect();
     
     let total: u64 = RetreatEntity::find().count(&state.database).await.unwrap();
-    let total_pages = (total + per_page - 1) / per_page;
-    let pagination_meta = PaginationMeta::build(total, total_pages, per_page, page);
+    let page: u64 = pagination.page();
+    let total_pages: u64 = (total + page_size - 1) / page_size;
+    let pagination_meta: PaginationMeta = PaginationMeta::build(total, total_pages, page_size, page);
     Ok(CustomResponse::<Vec<ReadRetreatSerializer>, PaginationMeta>::builder(serializers).meta(pagination_meta).build())
 }
 

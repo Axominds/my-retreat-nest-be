@@ -1,14 +1,14 @@
 use axum::{
     Json, Router,
     body::Body,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::Response,
     routing::{delete, get, patch, post},
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter,
-    TryIntoModel,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait,
+    QueryFilter, QuerySelect, TryIntoModel,
 };
 use validator::Validate;
 
@@ -17,8 +17,12 @@ use crate::{
         RetreatColumn, RetreatEntity, RetreatReviewActiveModel, RetreatReviewColumn,
         RetreatReviewEntity, RetreatReviewModel,
     },
-    serializers::retreat_reviews::{
-        CreateRetreatReviewSerializer, ReadRetreatReviewSerializer, UpdateRetreatReviewSerializer,
+    serializers::{
+        pagination::{Pagination, PaginationMeta},
+        retreat_reviews::{
+            CreateRetreatReviewSerializer, ReadRetreatReviewSerializer,
+            UpdateRetreatReviewSerializer,
+        },
     },
     set_fields,
     state::AppState,
@@ -73,6 +77,7 @@ async fn create_retreat_review(
 async fn list_retreat_review(
     State(state): State<AppState>,
     Path(retreat_id): Path<i64>,
+    Query(pagination): Query<Pagination>,
 ) -> Result<Response<Body>, Response<Body>> {
     // Find existing Retreat
     RetreatEntity::find()
@@ -84,8 +89,11 @@ async fn list_retreat_review(
             to_error_response_with_message("Retreat not found.", StatusCode::NOT_FOUND)
         })?;
 
+    let page_size: u64 = pagination.limit();
     let instances: Vec<RetreatReviewModel> = RetreatReviewEntity::find()
         .filter(RetreatReviewColumn::RetreatId.eq(retreat_id))
+        .limit(page_size)
+        .offset(pagination.offset())
         .all(&state.database)
         .await
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
@@ -94,7 +102,20 @@ async fn list_retreat_review(
     let serializers: Vec<ReadRetreatReviewSerializer> =
         instances.into_iter().map(|model| model.into()).collect();
 
-    Ok(CustomResponse::<Vec<ReadRetreatReviewSerializer>, ()>::builder(serializers).build())
+    let total: u64 = RetreatReviewEntity::find()
+        .filter(RetreatReviewColumn::RetreatId.eq(retreat_id))
+        .count(&state.database)
+        .await
+        .unwrap();
+    let page: u64 = pagination.page();
+    let total_pages: u64 = (total + page_size - 1) / page_size;
+    let pagination_meta: PaginationMeta =
+        PaginationMeta::build(total, total_pages, page_size, page);
+    Ok(
+        CustomResponse::<Vec<ReadRetreatReviewSerializer>, PaginationMeta>::builder(serializers)
+            .meta(pagination_meta)
+            .build(),
+    )
 }
 
 async fn update_retreat_review(
