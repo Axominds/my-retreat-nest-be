@@ -291,14 +291,15 @@ async fn get_gallery_image(
         })?;
 
     let image_relative_path: String = instance.image_path.clone();
+    println!("{}", image_relative_path);
 
     let result: Result<(Vec<u8>, HeaderMap), Box<dyn Error>> =
         read_retreat_gallery_with_headers(image_relative_path).await;
     let (bytes, headers) = match result {
         Ok(v) => v,
-        Err(_) => {
+        Err(e) => {
             return Err(to_error_response_with_message(
-                "Something went wrong.",
+                &e.to_string(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             ));
         }

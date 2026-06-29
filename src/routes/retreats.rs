@@ -19,11 +19,12 @@ use crate::{
     },
     serializers::{pagination::{Pagination, PaginationMeta}, retreats::{
         CreateRetreatSerializer, CreateRetreatUserSerializer, ReadRetreatSerializer,
-        UpdateRetreatSerializer, UpdateRetreatUserSerializer,
+        ReadRetreatUserSerializer, UpdateRetreatSerializer, UpdateRetreatUserSerializer,
     }},
     set_active_model_fields, set_fields,
     state::AppState,
     utils::{
+        extractors::auth::AuthAdmin,
         password::create_password,
         response::{CustomResponse, to_error_response, to_error_response_with_message},
     },
@@ -31,6 +32,7 @@ use crate::{
 
 async fn create_retreat(
     State(state): State<AppState>,
+    AuthAdmin(_): AuthAdmin,
     Json(payload): Json<CreateRetreatSerializer>,
 ) -> Result<Response<Body>, Response<Body>> {
     payload
@@ -107,6 +109,7 @@ async fn get_retreat(
 
 async fn update_retreat(
     State(state): State<AppState>,
+    AuthAdmin(_): AuthAdmin,
     Path(retreat_id): Path<i64>,
     Json(payload): Json<UpdateRetreatSerializer>,
 ) -> Result<Response<Body>, Response<Body>> {
@@ -162,6 +165,7 @@ async fn update_retreat(
 
 async fn delete_retreat(
     State(state): State<AppState>,
+    AuthAdmin(_): AuthAdmin,
     Path(retreat_id): Path<i64>,
 ) -> Result<Response<Body>, Response<Body>> {
     // Query a single record
@@ -191,6 +195,7 @@ async fn delete_retreat(
 
 async fn create_retreat_user(
     State(state): State<AppState>,
+    AuthAdmin(_): AuthAdmin,
     Path(retreat_id): Path<i64>,
     Json(payload): Json<CreateRetreatUserSerializer>,
 ) -> Result<Response<Body>, Response<Body>> {
@@ -267,6 +272,7 @@ async fn create_retreat_user(
 
 async fn update_retreat_user(
     State(state): State<AppState>,
+    AuthAdmin(_): AuthAdmin,
     Path(retreat_id): Path<i64>,
     Path(retreat_user_id): Path<i64>,
     Json(payload): Json<UpdateRetreatUserSerializer>,
@@ -305,6 +311,7 @@ async fn update_retreat_user(
 
 async fn delete_retreat_user(
     State(state): State<AppState>,
+    AuthAdmin(_): AuthAdmin,
     Path(retreat_id): Path<i64>,
     Path(retreat_user_id): Path<i64>,
 ) -> Result<Response<Body>, Response<Body>> {
@@ -341,6 +348,46 @@ async fn delete_retreat_user(
         .build())
 }
 
+async fn list_retreat_users(
+    State(state): State<AppState>,
+    AuthAdmin(_): AuthAdmin,
+    Path(retreat_id): Path<i64>,
+) -> Result<Response<Body>, Response<Body>> {
+    let retreat_users: Vec<RetreatUserModel> = RetreatUserEntity::find()
+        .filter(RetreatUserColumn::RetreatId.eq(retreat_id))
+        .all(&state.database)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    let user_ids: Vec<i64> = retreat_users.iter().map(|ru| ru.user_id).collect();
+
+    let users: Vec<UserModel> = UserEntity::find()
+        .filter(UserColumn::UserId.is_in(user_ids))
+        .all(&state.database)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    let user_map: std::collections::HashMap<i64, &UserModel> =
+        users.iter().map(|u| (u.user_id, u)).collect();
+
+    let serializers: Vec<ReadRetreatUserSerializer> = retreat_users
+        .into_iter()
+        .map(|ru| {
+            let user = user_map.get(&ru.user_id).expect("User should exist");
+            ReadRetreatUserSerializer {
+                retreat_user_id: ru.retreat_user_id,
+                retreat_id: ru.retreat_id,
+                user_id: ru.user_id,
+                name: user.name.clone(),
+                email: user.email.clone(),
+                role: ru.role,
+            }
+        })
+        .collect();
+
+    Ok(CustomResponse::<Vec<ReadRetreatUserSerializer>, ()>::builder(serializers).build())
+}
+
 pub fn retreat_router() -> Router<AppState> {
     let router = Router::new()
         .route("/retreats/", post(create_retreat))
@@ -348,7 +395,7 @@ pub fn retreat_router() -> Router<AppState> {
         .route("/retreats/{retreat_id}/", get(get_retreat))
         .route("/retreats/{retreat_id}/", patch(update_retreat))
         .route("/retreats/{retreat_id}/", delete(delete_retreat))
-        .route("/retreats/{retreat_id}/users/", post(create_retreat_user))
+        .route("/retreats/{retreat_id}/users/", get(list_retreat_users).post(create_retreat_user))
         .route(
             "/retreats/{retreat_id}/users/{retreat_user_id}/",
             patch(update_retreat_user),

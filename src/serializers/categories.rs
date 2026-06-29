@@ -13,7 +13,6 @@ fn validate_phone(phone: &str) -> Result<(), ValidationError> {
 
 #[derive(Debug, Clone, Deserialize, Validate)]
 pub struct CreateCategorySerializer {
-    #[validate(custom(function = "validate_phone"))]
     pub name: String,
     pub description: Option<String>,
 }

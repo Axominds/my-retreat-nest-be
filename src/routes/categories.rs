@@ -15,13 +15,18 @@ use validator::Validate;
 use crate::{
     entities_helper::{CategoryActiveModel, CategoryColumn, CategoryEntity, CategoryModel}, serializers::categories::{
         CreateCategorySerializer, ReadCategorySerializer, UpdateCategorySerializer,
-    }, set_active_model_fields, set_fields, state::AppState, utils::response::{to_error_response, to_error_response_with_message, CustomResponse}
+    }, set_active_model_fields, set_fields, state::AppState, utils::{
+        extractors::auth::AuthAdmin,
+        response::{to_error_response, to_error_response_with_message, CustomResponse},
+    },
 };
 
 async fn create_category(
     State(state): State<AppState>,
+    AuthAdmin(_): AuthAdmin,
     Json(payload): Json<CreateCategorySerializer>,
 ) -> Result<Response<Body>, Response<Body>> {
+    println!("{:?}", payload);
     payload
         .validate()
         .map_err(|e| to_error_response(e, StatusCode::BAD_REQUEST))?;
@@ -78,6 +83,7 @@ async fn get_category(
 
 async fn update_category(
     State(state): State<AppState>,
+    AuthAdmin(_): AuthAdmin,
     Path(category_id): Path<i64>,
     Json(payload): Json<UpdateCategorySerializer>,
 ) -> Result<Response<Body>, Response<Body>> {
@@ -120,6 +126,7 @@ async fn update_category(
 
 async fn delete_category(
     State(state): State<AppState>,
+    AuthAdmin(_): AuthAdmin,
     Path(category_id): Path<i64>,
 ) -> Result<Response<Body>, Response<Body>> {
     // Query a single record

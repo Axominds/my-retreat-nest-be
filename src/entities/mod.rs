@@ -3,6 +3,7 @@
 pub mod prelude;
 
 pub mod categories;
+pub mod password_reset_tokens;
 pub mod gallery_categories;
 pub mod retreat_galleries;
 pub mod retreat_reviews;

@@ -8,6 +8,7 @@ mod m20251030_145305_user_wishlist;
 mod m20251030_150713_retreat_reviews;
 mod m20251103_162943_retreat_gallery;
 mod m20251109_154739_gallery_category;
+mod m20260727_password_reset_tokens;
 
 pub struct Migrator;
 
@@ -23,6 +24,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20251030_150713_retreat_reviews::Migration),
             Box::new(m20251103_162943_retreat_gallery::Migration),
             Box::new(m20251109_154739_gallery_category::Migration),
+            Box::new(m20260727_password_reset_tokens::Migration),
         ]
     }
 }

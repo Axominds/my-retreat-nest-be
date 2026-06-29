@@ -25,3 +25,15 @@ pub struct TokenClaim{
 pub struct RefreshSerializer{
     pub refresh_token: String
 }
+
+#[derive(Debug, Clone, Deserialize, Validate)]
+pub struct ForgotPasswordSerializer {
+    #[validate(email)]
+    pub email: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Validate)]
+pub struct ResetPasswordSerializer {
+    pub token: String,
+    pub new_password: String,
+}

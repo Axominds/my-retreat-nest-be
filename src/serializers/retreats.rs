@@ -94,3 +94,13 @@ pub struct UpdateRetreatUserSerializer {
     #[serde(default, deserialize_with = "deserialize_some")]
     pub role: Option<Option<String>>,
 }
+
+#[derive(Serialize, Debug, Clone)]
+pub struct ReadRetreatUserSerializer {
+    pub retreat_user_id: i64,
+    pub retreat_id: i64,
+    pub user_id: i64,
+    pub name: String,
+    pub email: String,
+    pub role: Option<String>,
+}

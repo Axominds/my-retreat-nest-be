@@ -21,7 +21,7 @@ use crate::{
     set_fields,
     state::AppState,
     utils::{
-        extractors::auth::AuthUser,
+        extractors::auth::{AuthAdmin, AuthUser},
         password::create_password,
         response::{CustomResponse, to_error_response, to_error_response_with_message},
     },
@@ -153,6 +153,7 @@ async fn update_user(
 
 async fn delete_user(
     State(state): State<AppState>,
+    AuthAdmin(_): AuthAdmin,
     Path(user_id): Path<i64>,
 ) -> Result<Response<Body>, Response<Body>> {
     // Query a single record

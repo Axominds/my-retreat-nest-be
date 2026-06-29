@@ -69,8 +69,10 @@ pub async fn read_retreat_gallery_with_headers(
     image_path: String,
 ) -> Result<(Vec<u8>, HeaderMap), Box<dyn Error>> {
     let upload_dir = ENV.upload_dir.clone();
+    println!("{}", upload_dir.to_str().unwrap());
     let gallery_path = upload_dir.join(image_path);
     let mut image_content: Vec<u8> = Vec::new();
+    println!("{}", gallery_path.to_str().unwrap());
 
     let mut file = File::open(&gallery_path).await?;
     file.read_to_end(&mut image_content).await?;

@@ -1,6 +1,7 @@
 pub mod extractors;
 pub mod jwt;
 pub mod macros;
+pub mod mail;
 pub mod middlewares;
 pub mod password;
 pub mod response;
