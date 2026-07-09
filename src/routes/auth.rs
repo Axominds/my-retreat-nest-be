@@ -14,7 +14,8 @@ use validator::Validate;
 
 use crate::{
     entities_helper::{
-        PasswordResetTokenActiveModel, PasswordResetTokenColumn, PasswordResetTokenEntity,
+        AdminUserColumn, AdminUserEntity, PasswordResetTokenActiveModel,
+        PasswordResetTokenColumn, PasswordResetTokenEntity, RetreatUserColumn, RetreatUserEntity,
         UserColumn, UserEntity, UserModel,
     },
     serializers::auth::{
@@ -36,6 +37,7 @@ async fn login(
     payload
         .validate()
         .map_err(|e| to_error_response(e, StatusCode::BAD_REQUEST))?;
+
     let instance: UserModel = UserEntity::find()
         .filter(UserColumn::Email.eq(payload.email))
         .one(&state.database)
@@ -53,10 +55,48 @@ async fn login(
             .status_code(StatusCode::BAD_REQUEST)
             .build());
     }
+
+    match payload.login_type.as_str() {
+        "normal" => {}
+        "admin" => {
+            AdminUserEntity::find()
+                .filter(AdminUserColumn::UserId.eq(instance.user_id))
+                .one(&state.database)
+                .await
+                .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
+                .ok_or_else(|| {
+                    to_error_response_with_message(
+                        "Not an admin user.",
+                        StatusCode::FORBIDDEN,
+                    )
+                })?;
+        }
+        "retreat" => {
+            RetreatUserEntity::find()
+                .filter(RetreatUserColumn::UserId.eq(instance.user_id))
+                .one(&state.database)
+                .await
+                .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
+                .ok_or_else(|| {
+                    to_error_response_with_message(
+                        "Not a retreat user.",
+                        StatusCode::FORBIDDEN,
+                    )
+                })?;
+        }
+        _ => {
+            return Err(to_error_response_with_message(
+                "Invalid login type.",
+                StatusCode::BAD_REQUEST,
+            ));
+        }
+    }
+
     let token_claim: TokenClaim = TokenClaim {
         user_id: instance.user_id,
         name: instance.name,
         email: instance.email,
+        login_type: payload.login_type,
     };
 
     let access_token: String = generate_access_token(token_claim.clone())
@@ -85,7 +125,9 @@ async fn refresh(
 
     let refresh_token: String = payload.refresh_token;
 
-    let claims: TokenClaim = get_refresh_token_claim(&refresh_token).await.map_err(|e| to_error_response(e, StatusCode::BAD_REQUEST))?;
+    let claims: TokenClaim = get_refresh_token_claim(&refresh_token)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::BAD_REQUEST))?;
 
     let token_claim: TokenClaim = claims.clone();
 

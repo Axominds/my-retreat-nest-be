@@ -1,4 +1,5 @@
 #![allow(unused)]
+pub mod admin_users;
 pub mod categories;
 pub mod password_reset_tokens;
 pub mod gallery_categories;
@@ -9,6 +10,9 @@ pub mod retreats;
 pub mod users;
 pub mod wishlists;
 
+pub use admin_users::{
+    AdminUserActiveModel, AdminUserColumn, AdminUserEntity, AdminUserModel,
+};
 pub use categories::{CategoryActiveModel, CategoryColumn, CategoryEntity, CategoryModel};
 pub use password_reset_tokens::{
     PasswordResetTokenActiveModel, PasswordResetTokenColumn, PasswordResetTokenEntity,

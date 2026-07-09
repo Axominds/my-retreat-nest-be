@@ -25,7 +25,7 @@ use crate::{
     },
     state::AppState,
     utils::{
-        extractors::auth::AuthUser,
+        extractors::auth::AuthAdmin,
         response::{CustomResponse, to_error_response, to_error_response_with_message},
         storage::{
             read_retreat_gallery_with_headers, remove_retreat_gallery, store_retreat_gallery,
@@ -35,7 +35,7 @@ use crate::{
 
 async fn create_retreat_gallery(
     State(state): State<AppState>,
-    AuthUser(user): AuthUser,
+    AuthAdmin(user): AuthAdmin,
     Path(retreat_id): Path<i64>,
     mut multipart: Multipart,
 ) -> Result<Response<Body>, Response<Body>> {
@@ -73,6 +73,7 @@ async fn create_retreat_gallery(
                         .filter(
                             GalleryCategoriesColumn::GalleryCategoryId.eq(gallery_category_id_i64),
                         )
+                        .filter(GalleryCategoriesColumn::RetreatId.eq(retreat_id))
                         .one(&state.database)
                         .await
                         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
@@ -164,7 +165,7 @@ async fn list_retreat_gallery(
 
 async fn update_retreat_gallery(
     State(state): State<AppState>,
-    AuthUser(_): AuthUser,
+    AuthAdmin(_): AuthAdmin,
     Path((retreat_id, gallery_id)): Path<(i64, i64)>,
     mut multipart: Multipart,
 ) -> Result<Response<Body>, Response<Body>> {
@@ -213,6 +214,7 @@ async fn update_retreat_gallery(
                         .filter(
                             GalleryCategoriesColumn::GalleryCategoryId.eq(gallery_category_id_i64),
                         )
+                        .filter(GalleryCategoriesColumn::RetreatId.eq(retreat_id))
                         .one(&state.database)
                         .await
                         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
@@ -244,7 +246,7 @@ async fn update_retreat_gallery(
 
 async fn delete_retreat_gallery(
     State(state): State<AppState>,
-    AuthUser(_): AuthUser,
+    AuthAdmin(_): AuthAdmin,
     Path((retreat_id, gallery_id)): Path<(i64, i64)>,
 ) -> Result<Response<Body>, Response<Body>> {
     let instance: RetreatGalleriesModel = RetreatGalleriesEntity::find()

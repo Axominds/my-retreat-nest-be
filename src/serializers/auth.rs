@@ -4,7 +4,8 @@ use validator::Validate;
 #[derive(Debug, Clone, Deserialize, Validate)]
 pub struct LoginSerializer{
     pub email: String,
-    pub password: String
+    pub password: String,
+    pub login_type: String,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -18,6 +19,7 @@ pub struct TokenClaim{
     pub user_id: i64,
     pub email: String,
     pub name: String,
+    pub login_type: String,
 }
 
 

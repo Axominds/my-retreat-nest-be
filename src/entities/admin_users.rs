@@ -4,25 +4,19 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "wishlists")]
+#[sea_orm(table_name = "admin_users")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub wishlist_id: i64,
+    pub admin_user_id: i64,
+    #[sea_orm(unique)]
     pub user_id: i64,
-    pub retreat_id: i64,
+    pub role: String,
     pub created_at: DateTimeWithTimeZone,
+    pub updated_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::retreats::Entity",
-        from = "Column::RetreatId",
-        to = "super::retreats::Column::RetreatId",
-        on_update = "Cascade",
-        on_delete = "Cascade"
-    )]
-    Retreats,
     #[sea_orm(
         belongs_to = "super::users::Entity",
         from = "Column::UserId",
@@ -31,12 +25,6 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Users,
-}
-
-impl Related<super::retreats::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Retreats.def()
-    }
 }
 
 impl Related<super::users::Entity> for Entity {

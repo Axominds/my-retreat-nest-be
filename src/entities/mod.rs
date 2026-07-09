@@ -2,9 +2,10 @@
 
 pub mod prelude;
 
+pub mod admin_users;
 pub mod categories;
-pub mod password_reset_tokens;
 pub mod gallery_categories;
+pub mod password_reset_tokens;
 pub mod retreat_galleries;
 pub mod retreat_reviews;
 pub mod retreat_users;

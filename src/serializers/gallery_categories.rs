@@ -17,14 +17,16 @@ pub struct UpdateGalleryCategorySerializer{
 #[derive(Serialize, Clone, Debug, Validate)]
 pub struct ReadGalleryCategorySerializer{
     pub gallery_category_id: i64,
-    pub name: String
+    pub name: String,
+    pub retreat_id: i64,
 }
 
 impl From<GalleryCategoriesModel> for ReadGalleryCategorySerializer{
     fn from(value: GalleryCategoriesModel) -> Self {
         map_fields!(value, ReadGalleryCategorySerializer, {
             gallery_category_id,
-            name
+            name,
+            retreat_id,
         })
     }
 
