@@ -10,6 +10,7 @@ mod m20251103_162943_retreat_gallery;
 mod m20251109_154739_gallery_category;
 mod m20260727_password_reset_tokens;
 mod m20260728_create_admin_users;
+mod m20260718_gallery_category_non_nullable;
 mod m20260729_add_retreat_id_to_gallery_categories;
 
 pub struct Migrator;
@@ -28,6 +29,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20251109_154739_gallery_category::Migration),
             Box::new(m20260727_password_reset_tokens::Migration),
             Box::new(m20260728_create_admin_users::Migration),
+            Box::new(m20260718_gallery_category_non_nullable::Migration),
             Box::new(m20260729_add_retreat_id_to_gallery_categories::Migration),
         ]
     }

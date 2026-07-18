@@ -7,15 +7,16 @@ use axum::{
     routing::{patch, post},
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter,
-    TryIntoModel,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait,
+    QueryFilter, TryIntoModel,
 };
 use validator::Validate;
 
 use crate::{
     entities_helper::{
         GalleryCategoriesActiveModel, GalleryCategoriesColumn, GalleryCategoriesEntity,
-        GalleryCategoriesModel, RetreatColumn, RetreatEntity,
+        GalleryCategoriesModel, RetreatColumn, RetreatEntity, RetreatGalleriesColumn,
+        RetreatGalleriesEntity,
     },
     serializers::gallery_categories::{
         CreateGalleryCategorySerializer, ReadGalleryCategorySerializer,
@@ -132,6 +133,19 @@ async fn delete_gallery_category(
         .ok_or_else(|| {
             to_error_response_with_message("Gallery Category not found.", StatusCode::NOT_FOUND)
         })?;
+
+    let image_count: u64 = RetreatGalleriesEntity::find()
+        .filter(RetreatGalleriesColumn::GalleryCategoryId.eq(gallery_category_id))
+        .count(&state.database)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    if image_count > 0 {
+        return Err(to_error_response_with_message(
+            &format!("Cannot delete category with {} associated image(s). Reassign them first.", image_count),
+            StatusCode::BAD_REQUEST,
+        ));
+    }
 
     let active_model: GalleryCategoriesActiveModel = instance.into_active_model();
 

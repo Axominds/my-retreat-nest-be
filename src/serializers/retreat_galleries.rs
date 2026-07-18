@@ -8,7 +8,7 @@ pub struct ReadRetreatGallerySerializer{
     retreat_id: i64,
     caption: Option<String>,
     order: Option<i32>,
-    gallery_category_id: Option<i64>,
+    gallery_category_id: i64,
     created_by: Option<i64>,
     updated_by: Option<i64>
 }

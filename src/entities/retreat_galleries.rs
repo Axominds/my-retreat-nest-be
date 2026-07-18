@@ -18,7 +18,7 @@ pub struct Model {
     pub updated_at: DateTimeWithTimeZone,
     pub created_by: Option<i64>,
     pub updated_by: Option<i64>,
-    pub gallery_category_id: Option<i64>,
+    pub gallery_category_id: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -28,7 +28,7 @@ pub enum Relation {
         from = "Column::GalleryCategoryId",
         to = "super::gallery_categories::Column::GalleryCategoryId",
         on_update = "Cascade",
-        on_delete = "SetNull"
+        on_delete = "Restrict"
     )]
     GalleryCategories,
     #[sea_orm(

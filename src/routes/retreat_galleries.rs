@@ -89,6 +89,11 @@ async fn create_retreat_gallery(
             _ => {}
         }
     }
+
+    let gallery_category_id = gallery_category_id.ok_or_else(|| {
+        to_error_response_with_message("Gallery category is required.", StatusCode::BAD_REQUEST)
+    })?;
+
     let active_model: RetreatGalleriesActiveModel = RetreatGalleriesActiveModel {
         caption: Set(caption),
         image_path: Set(image_path),
@@ -224,8 +229,7 @@ async fn update_retreat_gallery(
                                 StatusCode::NOT_FOUND,
                             )
                         })?;
-                    let gallery_category_id: Option<i64> = Some(gallery_category_id_i64);
-                    active_model.gallery_category_id = Set(gallery_category_id);
+                    active_model.gallery_category_id = Set(gallery_category_id_i64);
                 }
             }
             _ => {}
