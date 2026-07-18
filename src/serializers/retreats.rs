@@ -120,6 +120,10 @@ pub struct RetreatFilter {
     pub page: Option<u64>,
     pub page_size: Option<u64>,
     pub is_published: Option<bool>,
+    pub search: Option<String>,
+    pub category_id: Option<i64>,
+    pub sort_by: Option<String>,
+    pub sort_order: Option<String>,
 }
 
 impl Paginate for RetreatFilter {

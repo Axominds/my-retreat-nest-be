@@ -7,16 +7,16 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait,
-    QueryFilter, QuerySelect, TryIntoModel,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, Order,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, TryIntoModel,
 };
 use validator::Validate;
 
 use crate::{
     entities_helper::{UserActiveModel, UserColumn, UserEntity, UserModel},
     serializers::{
-        pagination::{Paginate, Pagination, PaginationMeta},
-        users::{CreateUserSerializer, ReadUserSerializer, UpdateUserSerializer},
+        pagination::{Paginate, PaginationMeta},
+        users::{CreateUserSerializer, ReadUserSerializer, UpdateUserSerializer, UserFilter},
     },
     set_fields,
     state::AppState,
@@ -68,25 +68,41 @@ async fn create_users(
 
 async fn list_users(
     State(state): State<AppState>,
-    Query(pagination): Query<Pagination>,
+    Query(filter): Query<UserFilter>,
 ) -> Result<Response<Body>, Response<Body>> {
-    // Query a single record
-    let page_size: u64 = pagination.limit();
-    let instances: Vec<UserModel> = UserEntity::find()
-        .limit(page_size)
-        .offset(pagination.offset())
+    let mut query = UserEntity::find();
+
+    if let Some(ref search) = filter.search {
+        query = query.filter(
+            UserColumn::Name.contains(search).or(UserColumn::Email.contains(search)),
+        );
+    }
+
+    match filter.sort_by.as_deref() {
+        Some("name") => {
+            let order = match filter.sort_order.as_deref() {
+                Some("desc") => Order::Desc,
+                _ => Order::Asc,
+            };
+            query = query.order_by(UserColumn::Name, order);
+        }
+        _ => {
+            query = query.order_by(UserColumn::UserId, Order::Desc);
+        }
+    }
+
+    let total: u64 = query.clone().count(&state.database).await.unwrap();
+    let instances: Vec<UserModel> = query
+        .limit(filter.limit())
+        .offset(filter.offset())
         .all(&state.database)
         .await
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-    // Convert model to serializer
+
     let serializers: Vec<ReadUserSerializer> =
         instances.into_iter().map(|model| model.into()).collect();
 
-    let total: u64 = UserEntity::find().count(&state.database).await.unwrap();
-    let page: u64 = pagination.page();
-    let total_pages: u64 = (total + page_size - 1) / page_size;
-    let pagination_meta: PaginationMeta =
-        PaginationMeta::build(total, total_pages, page_size, page);
+    let pagination_meta = filter.build_meta(total);
     Ok(
         CustomResponse::<Vec<ReadUserSerializer>, PaginationMeta>::builder(serializers)
             .meta(pagination_meta)

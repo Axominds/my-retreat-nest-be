@@ -1,19 +1,22 @@
 use axum::{
     Json, Router,
     body::Body,
-    extract::{Multipart, Path, State},
+    extract::{Multipart, Path, Query, State},
     http::{Response, StatusCode},
     routing::{delete, get, patch, post},
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter,
-    TryIntoModel,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait,
+    QueryFilter, QuerySelect, TryIntoModel,
 };
 use validator::Validate;
 
 use crate::{
-    entities_helper::{CategoryActiveModel, CategoryColumn, CategoryEntity, CategoryModel}, serializers::categories::{
-        CreateCategorySerializer, ReadCategorySerializer, UpdateCategorySerializer,
+    entities_helper::{CategoryActiveModel, CategoryColumn, CategoryEntity, CategoryModel}, serializers::{
+        categories::{
+            CategoryFilter, CreateCategorySerializer, ReadCategorySerializer, UpdateCategorySerializer,
+        },
+        pagination::{Paginate, PaginationMeta},
     }, set_active_model_fields, set_fields, state::AppState, utils::{
         extractors::auth::AuthAdmin,
         response::{to_error_response, to_error_response_with_message, CustomResponse},
@@ -50,16 +53,33 @@ async fn create_category(
         .build())
 }
 
-async fn list_categories(State(state): State<AppState>) -> Result<Response<Body>, Response<Body>> {
-    // Query a single record
-    let instances: Vec<CategoryModel> = CategoryEntity::find()
+async fn list_categories(
+    State(state): State<AppState>,
+    Query(filter): Query<CategoryFilter>,
+) -> Result<Response<Body>, Response<Body>> {
+    let mut query = CategoryEntity::find();
+
+    if let Some(ref search) = filter.search {
+        query = query.filter(CategoryColumn::Name.contains(search));
+    }
+
+    let total: u64 = query.clone().count(&state.database).await.unwrap();
+
+    let instances: Vec<CategoryModel> = query
+        .clone()
+        .limit(filter.limit())
+        .offset(filter.offset())
         .all(&state.database)
         .await
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-    // Convert model to serializer
+
     let serializers: Vec<ReadCategorySerializer> =
         instances.into_iter().map(|model| model.into()).collect();
-    Ok(CustomResponse::<Vec<ReadCategorySerializer>, ()>::builder(serializers).build())
+
+    let pagination_meta = filter.build_meta(total);
+    Ok(CustomResponse::<Vec<ReadCategorySerializer>, PaginationMeta>::builder(serializers)
+        .meta(pagination_meta)
+        .build())
 }
 
 async fn get_category(

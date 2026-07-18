@@ -1,6 +1,10 @@
 use std::borrow::Cow;
 
-use crate::{entities_helper::categories::CategoryModel, utils::serializer::deserialize_some};
+use crate::{
+    entities_helper::categories::CategoryModel,
+    serializers::pagination::Paginate,
+    utils::serializer::deserialize_some,
+};
 use serde::{Deserialize, Serialize};
 use validator::{Validate, ValidationError};
 
@@ -41,4 +45,29 @@ pub struct UpdateCategorySerializer {
     pub name: Option<String>,
     #[serde(default, deserialize_with = "deserialize_some")]
     pub description: Option<Option<String>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CategoryFilter {
+    pub page: Option<u64>,
+    pub page_size: Option<u64>,
+    pub search: Option<String>,
+}
+
+impl Paginate for CategoryFilter {
+    fn limit(&self) -> u64 {
+        self.page_size.unwrap_or(10)
+    }
+
+    fn page(&self) -> u64 {
+        self.page.unwrap_or(1)
+    }
+
+    fn offset(&self) -> u64 {
+        let page = self.page();
+        if page == 0 {
+            return 0;
+        }
+        (page - 1) * self.limit()
+    }
 }

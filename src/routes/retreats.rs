@@ -6,7 +6,8 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait, QueryFilter, QuerySelect, TryIntoModel
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, Order,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, TryIntoModel
 };
 
 use validator::Validate;
@@ -78,8 +79,42 @@ async fn list_retreats(
     Query(filter): Query<RetreatFilter>,
 ) -> Result<Response<Body>, Response<Body>> {
     let mut query = RetreatEntity::find();
-    if filter.is_published == Some(true) {
-        query = query.filter(RetreatColumn::IsPublished.eq(true));
+
+    if let Some(val) = filter.is_published {
+        query = query.filter(RetreatColumn::IsPublished.eq(val));
+    }
+
+    if let Some(ref search) = filter.search {
+        query = query.filter(
+            RetreatColumn::Name
+                .contains(search)
+                .or(RetreatColumn::Slug.contains(search)),
+        );
+    }
+
+    if let Some(category_id) = filter.category_id {
+        query = query.filter(RetreatColumn::CategoryId.eq(category_id));
+    }
+
+    match filter.sort_by.as_deref() {
+        Some("name") => {
+            let order = match filter.sort_order.as_deref() {
+                Some("desc") => Order::Desc,
+                _ => Order::Asc,
+            };
+            query = query.order_by(RetreatColumn::Name, order);
+        }
+        Some("oldest") => {
+            query = query.order_by(RetreatColumn::RetreatId, Order::Asc);
+        }
+        Some("status") => {
+            query = query
+                .order_by(RetreatColumn::IsPublished, Order::Desc)
+                .order_by(RetreatColumn::Name, Order::Asc);
+        }
+        _ => {
+            query = query.order_by(RetreatColumn::RetreatId, Order::Desc);
+        }
     }
 
     let instances: Vec<RetreatModel> = query.clone()

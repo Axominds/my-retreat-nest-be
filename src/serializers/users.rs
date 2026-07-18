@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
+use crate::{entities::users::Model as UserModel, serializers::pagination::Paginate, utils::serializer::deserialize_some};
 use serde::{Deserialize, Serialize};
-use crate::{entities::users::Model as UserModel, utils::serializer::deserialize_some};
 use validator::{Validate, ValidationError};
 
 fn validate_phone(phone: &str) -> Result<(), ValidationError> {
@@ -36,6 +36,33 @@ impl From<UserModel> for ReadUserSerializer{
     }
 }
 
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UserFilter {
+    pub page: Option<u64>,
+    pub page_size: Option<u64>,
+    pub search: Option<String>,
+    pub sort_by: Option<String>,
+    pub sort_order: Option<String>,
+}
+
+impl Paginate for UserFilter {
+    fn limit(&self) -> u64 {
+        self.page_size.unwrap_or(10)
+    }
+
+    fn page(&self) -> u64 {
+        self.page.unwrap_or(1)
+    }
+
+    fn offset(&self) -> u64 {
+        let page = self.page();
+        if page == 0 {
+            return 0;
+        }
+        (page - 1) * self.limit()
+    }
+}
 
 #[derive(Debug, Clone, Deserialize, Validate, Serialize)]
 pub struct UpdateUserSerializer{
