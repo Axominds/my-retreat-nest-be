@@ -1,4 +1,8 @@
-use crate::{entities_helper::{RetreatModel}, map_fields, utils::serializer::deserialize_some};
+use crate::{
+    entities_helper::{RetreatModel},
+    serializers::pagination::Paginate,
+    utils::serializer::deserialize_some,
+};
 use sea_orm::prelude::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -34,26 +38,28 @@ pub struct ReadRetreatSerializer {
     budget_min: Option<Decimal>,
     budget_max: Option<Decimal>,
     is_published: bool,
+    pub average_rating: Option<f64>,
 }
 
 impl From<RetreatModel> for ReadRetreatSerializer {
     fn from(value: RetreatModel) -> Self {
-        map_fields!(value, ReadRetreatSerializer, {
-            retreat_id,
-            name,
-            description,
-            category_id,
-            slug,
-            social_links,
-            email,
-            phone,
-            latitude,
-            longitude,
-            address,
-            budget_min,
-            budget_max,
-            is_published
-        })
+        ReadRetreatSerializer {
+            retreat_id: value.retreat_id,
+            name: value.name,
+            description: value.description,
+            category_id: value.category_id,
+            slug: value.slug,
+            social_links: value.social_links,
+            email: value.email,
+            phone: value.phone,
+            latitude: value.latitude,
+            longitude: value.longitude,
+            address: value.address,
+            budget_min: value.budget_min,
+            budget_max: value.budget_max,
+            is_published: value.is_published,
+            average_rating: None,
+        }
     }
 }
 
@@ -103,4 +109,29 @@ pub struct ReadRetreatUserSerializer {
     pub name: String,
     pub email: String,
     pub role: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RetreatFilter {
+    pub page: Option<u64>,
+    pub page_size: Option<u64>,
+    pub is_published: Option<bool>,
+}
+
+impl Paginate for RetreatFilter {
+    fn limit(&self) -> u64 {
+        self.page_size.unwrap_or(10)
+    }
+
+    fn page(&self) -> u64 {
+        self.page.unwrap_or(1)
+    }
+
+    fn offset(&self) -> u64 {
+        let page: u64 = self.page();
+        if page == 0 {
+            return 0;
+        }
+        (page - 1) * self.limit()
+    }
 }

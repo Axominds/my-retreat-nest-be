@@ -16,7 +16,7 @@ use crate::{
         WishlistModel,
     },
     serializers::{
-        pagination::{Pagination, PaginationMeta},
+        pagination::{Paginate, Pagination, PaginationMeta},
         wishlists::ReadWishlistSerializer,
     },
     state::AppState,

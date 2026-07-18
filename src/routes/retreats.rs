@@ -13,14 +13,18 @@ use validator::Validate;
 
 use crate::{
     entities_helper::{
-        RetreatActiveModel, RetreatColumn, RetreatEntity, RetreatModel, RetreatUserActiveModel,
-        RetreatUserColumn, RetreatUserEntity, RetreatUserModel, UserActiveModel, UserColumn,
-        UserEntity, UserModel,
+        RetreatActiveModel, RetreatColumn, RetreatEntity, RetreatModel, RetreatReviewColumn,
+        RetreatReviewEntity, RetreatUserActiveModel, RetreatUserColumn, RetreatUserEntity,
+        RetreatUserModel, UserActiveModel, UserColumn, UserEntity, UserModel,
     },
-    serializers::{pagination::{Pagination, PaginationMeta}, retreats::{
-        CreateRetreatSerializer, CreateRetreatUserSerializer, ReadRetreatSerializer,
-        ReadRetreatUserSerializer, UpdateRetreatSerializer, UpdateRetreatUserSerializer,
-    }},
+    serializers::{
+        pagination::{Paginate, PaginationMeta},
+        retreats::{
+            CreateRetreatSerializer, CreateRetreatUserSerializer, ReadRetreatSerializer,
+            ReadRetreatUserSerializer, RetreatFilter, UpdateRetreatSerializer,
+            UpdateRetreatUserSerializer,
+        },
+    },
     set_active_model_fields, set_fields,
     state::AppState,
     utils::{
@@ -68,33 +72,63 @@ async fn create_retreat(
         .build())
 }
 
-async fn list_retreats(State(state): State<AppState>, Query(pagination): Query<Pagination>) -> Result<Response<Body>, Response<Body>> {
-    // Query a single record
-    let page_size: u64 = pagination.limit();
-    let instances: Vec<RetreatModel> = RetreatEntity::find()
-        .limit(page_size)
-        .offset(pagination.offset())
+async fn list_retreats(
+    State(state): State<AppState>,
+    Query(filter): Query<RetreatFilter>,
+) -> Result<Response<Body>, Response<Body>> {
+    let mut query = RetreatEntity::find();
+    if filter.is_published == Some(true) {
+        query = query.filter(RetreatColumn::IsPublished.eq(true));
+    }
+
+    let instances: Vec<RetreatModel> = query.clone()
+        .limit(filter.limit())
+        .offset(filter.offset())
         .all(&state.database)
         .await
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-    // Convert model to serializer
-    let serializers: Vec<ReadRetreatSerializer> =
+
+    let retreat_ids: Vec<i64> = instances.iter().map(|m| m.retreat_id).collect();
+    let mut serializers: Vec<ReadRetreatSerializer> =
         instances.into_iter().map(|model| model.into()).collect();
-    
-    let total: u64 = RetreatEntity::find().count(&state.database).await.unwrap();
-    let page: u64 = pagination.page();
-    let total_pages: u64 = (total + page_size - 1) / page_size;
-    let pagination_meta: PaginationMeta = PaginationMeta::build(total, total_pages, page_size, page);
+
+    let reviews = RetreatReviewEntity::find()
+        .filter(RetreatReviewColumn::RetreatId.is_in(retreat_ids.clone()))
+        .all(&state.database)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    let mut sum_map: std::collections::HashMap<i64, f64> = std::collections::HashMap::new();
+    let mut count_map: std::collections::HashMap<i64, usize> = std::collections::HashMap::new();
+    for review in &reviews {
+        *sum_map.entry(review.retreat_id).or_default() += review.rating;
+        *count_map.entry(review.retreat_id).or_default() += 1;
+    }
+    let avg_map: std::collections::HashMap<i64, f64> = sum_map
+        .into_iter()
+        .filter_map(|(id, sum)| count_map.get(&id).map(|&count| (id, sum / count as f64)))
+        .collect();
+    for (serializer, id) in serializers.iter_mut().zip(&retreat_ids) {
+        serializer.average_rating = avg_map.get(id).copied();
+    }
+
+    let total: u64 = query.count(&state.database).await.unwrap();
+    let pagination_meta = filter.build_meta(total);
     Ok(CustomResponse::<Vec<ReadRetreatSerializer>, PaginationMeta>::builder(serializers).meta(pagination_meta).build())
 }
 
 async fn get_retreat(
     State(state): State<AppState>,
     Path(retreat_id): Path<i64>,
+    Query(filter): Query<RetreatFilter>,
 ) -> Result<Response<Body>, Response<Body>> {
-    // Query a single record
-    let instance = RetreatEntity::find()
-        .filter(RetreatColumn::RetreatId.eq(retreat_id))
+    let mut query = RetreatEntity::find()
+        .filter(RetreatColumn::RetreatId.eq(retreat_id));
+    if filter.is_published == Some(true) {
+        query = query.filter(RetreatColumn::IsPublished.eq(true));
+    }
+
+    let instance = query
         .one(&state.database)
         .await
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
@@ -102,8 +136,20 @@ async fn get_retreat(
             to_error_response_with_message("Retreat not found.", StatusCode::NOT_FOUND)
         })?;
 
-    // Convert model to serializer
-    let serializer: ReadRetreatSerializer = instance.into();
+    let retreat_id = instance.retreat_id;
+    let mut serializer: ReadRetreatSerializer = instance.into();
+
+    let reviews = RetreatReviewEntity::find()
+        .filter(RetreatReviewColumn::RetreatId.eq(retreat_id))
+        .all(&state.database)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    if !reviews.is_empty() {
+        let sum: f64 = reviews.iter().map(|r| r.rating).sum();
+        serializer.average_rating = Some(sum / reviews.len() as f64);
+    }
+
     Ok(CustomResponse::<ReadRetreatSerializer, ()>::builder(serializer).build())
 }
 

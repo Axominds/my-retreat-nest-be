@@ -18,7 +18,7 @@ use crate::{
         RetreatReviewEntity, RetreatReviewModel,
     },
     serializers::{
-        pagination::{Pagination, PaginationMeta},
+        pagination::{Paginate, Pagination, PaginationMeta},
         retreat_reviews::{
             CreateRetreatReviewSerializer, ReadRetreatReviewSerializer,
             UpdateRetreatReviewSerializer,

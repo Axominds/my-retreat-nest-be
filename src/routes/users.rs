@@ -15,7 +15,7 @@ use validator::Validate;
 use crate::{
     entities_helper::{UserActiveModel, UserColumn, UserEntity, UserModel},
     serializers::{
-        pagination::{Pagination, PaginationMeta},
+        pagination::{Paginate, Pagination, PaginationMeta},
         users::{CreateUserSerializer, ReadUserSerializer, UpdateUserSerializer},
     },
     set_fields,

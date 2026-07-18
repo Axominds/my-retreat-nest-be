@@ -20,7 +20,7 @@ use crate::{
         RetreatGalleriesModel,
     },
     serializers::{
-        pagination::{Pagination, PaginationMeta},
+        pagination::{Paginate, Pagination, PaginationMeta},
         retreat_galleries::ReadRetreatGallerySerializer,
     },
     state::AppState,
