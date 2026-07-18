@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{entities_helper::categories::CategoryModel, map_fields, utils::serializer::deserialize_some};
+use crate::{entities_helper::categories::CategoryModel, utils::serializer::deserialize_some};
 use serde::{Deserialize, Serialize};
 use validator::{Validate, ValidationError};
 
@@ -22,15 +22,17 @@ pub struct ReadCategorySerializer {
     category_id: i64,
     name: String,
     description: Option<String>,
+    pub thumbnail_image: Option<String>,
 }
 
 impl From<CategoryModel> for ReadCategorySerializer {
     fn from(value: CategoryModel) -> Self {
-        map_fields!(value, ReadCategorySerializer, {
-            category_id,
-            name,
-            description
-        })
+        ReadCategorySerializer {
+            category_id: value.category_id,
+            name: value.name,
+            description: value.description,
+            thumbnail_image: value.thumbnail_image.map(|_| format!("/categories/{}/thumbnail/image/", value.category_id)),
+        }
     }
 }
 

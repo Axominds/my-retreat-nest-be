@@ -1,7 +1,7 @@
 use axum::{
     Json, Router,
     body::Body,
-    extract::{Path, Query, State},
+    extract::{Multipart, Path, Query, State},
     http::{Response, StatusCode},
     routing::{delete, get, patch, post},
 };
@@ -31,6 +31,7 @@ use crate::{
         extractors::auth::AuthAdmin,
         password::create_password,
         response::{CustomResponse, to_error_response, to_error_response_with_message},
+        storage::{self, read_image_with_headers},
     },
 };
 
@@ -434,6 +435,164 @@ async fn list_retreat_users(
     Ok(CustomResponse::<Vec<ReadRetreatUserSerializer>, ()>::builder(serializers).build())
 }
 
+async fn upload_retreat_thumbnail(
+    State(state): State<AppState>,
+    AuthAdmin(user): AuthAdmin,
+    Path(retreat_id): Path<i64>,
+    mut multipart: Multipart,
+) -> Result<Response<Body>, Response<Body>> {
+    let instance = RetreatEntity::find()
+        .filter(RetreatColumn::RetreatId.eq(retreat_id))
+        .one(&state.database)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
+        .ok_or_else(|| {
+            to_error_response_with_message("Retreat not found.", StatusCode::NOT_FOUND)
+        })?;
+
+    let mut image_path: Option<String> = None;
+    while let Some(field) = multipart.next_field().await.unwrap_or(None) {
+        if field.name().unwrap_or("") == "image" {
+            let file_name = field.file_name().unwrap().to_string();
+            let file_content = field.bytes().await.unwrap();
+            image_path = Some(
+                storage::store_image(
+                    file_content,
+                    file_name,
+                    "retreat/thumbnail",
+                    instance.thumbnail_image.clone(),
+                )
+                .await,
+            );
+        }
+    }
+
+    let image_path = image_path.ok_or_else(|| {
+        to_error_response_with_message("Image file is required.", StatusCode::BAD_REQUEST)
+    })?;
+
+    let mut active_model: RetreatActiveModel = instance.into_active_model();
+    active_model.thumbnail_image = Set(Some(image_path));
+    active_model.updated_by = Set(Some(user.user_id));
+
+    let instance = active_model
+        .update(&state.database)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    let serializer: ReadRetreatSerializer = instance.into();
+    Ok(CustomResponse::<ReadRetreatSerializer, ()>::builder(serializer)
+        .message("Thumbnail uploaded successfully.")
+        .build())
+}
+
+async fn upload_retreat_banner(
+    State(state): State<AppState>,
+    AuthAdmin(user): AuthAdmin,
+    Path(retreat_id): Path<i64>,
+    mut multipart: Multipart,
+) -> Result<Response<Body>, Response<Body>> {
+    let instance = RetreatEntity::find()
+        .filter(RetreatColumn::RetreatId.eq(retreat_id))
+        .one(&state.database)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
+        .ok_or_else(|| {
+            to_error_response_with_message("Retreat not found.", StatusCode::NOT_FOUND)
+        })?;
+
+    let mut image_path: Option<String> = None;
+    while let Some(field) = multipart.next_field().await.unwrap_or(None) {
+        if field.name().unwrap_or("") == "image" {
+            let file_name = field.file_name().unwrap().to_string();
+            let file_content = field.bytes().await.unwrap();
+            image_path = Some(
+                storage::store_image(
+                    file_content,
+                    file_name,
+                    "retreat/banner",
+                    instance.banner_image.clone(),
+                )
+                .await,
+            );
+        }
+    }
+
+    let image_path = image_path.ok_or_else(|| {
+        to_error_response_with_message("Image file is required.", StatusCode::BAD_REQUEST)
+    })?;
+
+    let mut active_model: RetreatActiveModel = instance.into_active_model();
+    active_model.banner_image = Set(Some(image_path));
+    active_model.updated_by = Set(Some(user.user_id));
+
+    let instance = active_model
+        .update(&state.database)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    let serializer: ReadRetreatSerializer = instance.into();
+    Ok(CustomResponse::<ReadRetreatSerializer, ()>::builder(serializer)
+        .message("Banner uploaded successfully.")
+        .build())
+}
+
+async fn get_retreat_thumbnail_image(
+    State(state): State<AppState>,
+    Path(retreat_id): Path<i64>,
+) -> Result<Response<Body>, Response<Body>> {
+    let instance = RetreatEntity::find()
+        .filter(RetreatColumn::RetreatId.eq(retreat_id))
+        .one(&state.database)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
+        .ok_or_else(|| {
+            to_error_response_with_message("Retreat not found.", StatusCode::NOT_FOUND)
+        })?;
+
+    let image_path = instance.thumbnail_image.ok_or_else(|| {
+        to_error_response_with_message("Thumbnail not found.", StatusCode::NOT_FOUND)
+    })?;
+
+    let (bytes, headers) = read_image_with_headers(image_path)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    let mut builder = Response::builder().status(StatusCode::OK);
+    for (key, value) in headers.iter() {
+        builder = builder.header(key, value);
+    }
+    Ok(builder.body(Body::from(bytes)).unwrap())
+}
+
+async fn get_retreat_banner_image(
+    State(state): State<AppState>,
+    Path(retreat_id): Path<i64>,
+) -> Result<Response<Body>, Response<Body>> {
+    let instance = RetreatEntity::find()
+        .filter(RetreatColumn::RetreatId.eq(retreat_id))
+        .one(&state.database)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
+        .ok_or_else(|| {
+            to_error_response_with_message("Retreat not found.", StatusCode::NOT_FOUND)
+        })?;
+
+    let image_path = instance.banner_image.ok_or_else(|| {
+        to_error_response_with_message("Banner not found.", StatusCode::NOT_FOUND)
+    })?;
+
+    let (bytes, headers) = read_image_with_headers(image_path)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    let mut builder = Response::builder().status(StatusCode::OK);
+    for (key, value) in headers.iter() {
+        builder = builder.header(key, value);
+    }
+    Ok(builder.body(Body::from(bytes)).unwrap())
+}
+
 pub fn retreat_router() -> Router<AppState> {
     let router = Router::new()
         .route("/retreats/", post(create_retreat))
@@ -449,6 +608,10 @@ pub fn retreat_router() -> Router<AppState> {
         .route(
             "/retreats/{retreat_id}/users/{retreat_user_id}/",
             delete(delete_retreat_user),
-        );
+        )
+        .route("/retreats/{retreat_id}/thumbnail/", post(upload_retreat_thumbnail))
+        .route("/retreats/{retreat_id}/thumbnail/image/", get(get_retreat_thumbnail_image))
+        .route("/retreats/{retreat_id}/banner/", post(upload_retreat_banner))
+        .route("/retreats/{retreat_id}/banner/image/", get(get_retreat_banner_image));
     return router;
 }

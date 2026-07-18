@@ -38,6 +38,8 @@ pub struct ReadRetreatSerializer {
     budget_min: Option<Decimal>,
     budget_max: Option<Decimal>,
     is_published: bool,
+    pub thumbnail_image: Option<String>,
+    pub banner_image: Option<String>,
     pub average_rating: Option<f64>,
 }
 
@@ -58,6 +60,8 @@ impl From<RetreatModel> for ReadRetreatSerializer {
             budget_min: value.budget_min,
             budget_max: value.budget_max,
             is_published: value.is_published,
+            thumbnail_image: value.thumbnail_image.map(|_| format!("/retreats/{}/thumbnail/image/", value.retreat_id)),
+            banner_image: value.banner_image.map(|_| format!("/retreats/{}/banner/image/", value.retreat_id)),
             average_rating: None,
         }
     }

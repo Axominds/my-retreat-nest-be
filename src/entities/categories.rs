@@ -11,6 +11,8 @@ pub struct Model {
     pub name: String,
     #[sea_orm(column_type = "Text", nullable)]
     pub description: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub thumbnail_image: Option<String>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
     pub created_by: Option<i64>,
