@@ -15,11 +15,11 @@ pub struct Model {
     #[sea_orm(unique)]
     pub slug: String,
     pub social_links: Json,
-    pub email: Option<String>,
-    pub phone: Option<String>,
+    pub email: String,
+    pub phone: String,
     pub logo: Option<String>,
-    pub latitude: Option<Decimal>,
-    pub longitude: Option<Decimal>,
+    pub latitude: Decimal,
+    pub longitude: Decimal,
     #[sea_orm(column_type = "Text", nullable)]
     pub address: Option<String>,
     pub budget_min: Option<Decimal>,

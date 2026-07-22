@@ -2171,6 +2171,7 @@ dependencies = [
  "mime_guess",
  "once_cell",
  "password-worker",
+ "rand",
  "sea-orm",
  "serde",
  "serde_json",

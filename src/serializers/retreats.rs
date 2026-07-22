@@ -15,10 +15,10 @@ pub struct CreateRetreatSerializer {
     pub category_id: i64,
     pub slug: String,
     pub social_links: JsonValue,
-    pub email: Option<String>,
-    pub phone: Option<String>,
-    pub latitude: Option<Decimal>,
-    pub longitude: Option<Decimal>,
+    pub email: String,
+    pub phone: String,
+    pub latitude: Decimal,
+    pub longitude: Decimal,
     pub address: Option<String>,
 }
 
@@ -30,10 +30,10 @@ pub struct ReadRetreatSerializer {
     category_id: i64,
     slug: String,
     social_links: JsonValue,
-    email: Option<String>,
-    phone: Option<String>,
-    latitude: Option<Decimal>,
-    longitude: Option<Decimal>,
+    email: String,
+    phone: String,
+    latitude: Decimal,
+    longitude: Decimal,
     address: Option<String>,
     budget_min: Option<Decimal>,
     budget_max: Option<Decimal>,
@@ -75,14 +75,14 @@ pub struct UpdateRetreatSerializer {
     pub category_id: Option<i64>,
     pub slug: Option<String>,
     pub social_links: Option<JsonValue>,
-    #[serde(default, deserialize_with = "deserialize_some")]
-    pub email: Option<Option<String>>,
-    #[serde(default, deserialize_with = "deserialize_some")]
-    pub phone: Option<Option<String>>,
-    #[serde(default, deserialize_with = "deserialize_some")]
-    pub latitude: Option<Option<Decimal>>,
-    #[serde(default, deserialize_with = "deserialize_some")]
-    pub longitude: Option<Option<Decimal>>,
+    #[serde(default)]
+    pub email: Option<String>,
+    #[serde(default)]
+    pub phone: Option<String>,
+    #[serde(default)]
+    pub latitude: Option<Decimal>,
+    #[serde(default)]
+    pub longitude: Option<Decimal>,
     #[serde(default, deserialize_with = "deserialize_some")]
     pub address: Option<Option<String>>,
     #[serde(default, deserialize_with = "deserialize_some")]

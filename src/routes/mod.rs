@@ -2,6 +2,7 @@ pub mod auth;
 pub mod categories;
 pub mod gallery_categories;
 pub mod health;
+pub mod listing_requests;
 pub mod retreat_galleries;
 pub mod retreat_reviews;
 pub mod retreats;

@@ -5,6 +5,7 @@ pub mod prelude;
 pub mod admin_users;
 pub mod categories;
 pub mod gallery_categories;
+pub mod listing_requests;
 pub mod password_reset_tokens;
 pub mod retreat_galleries;
 pub mod retreat_reviews;

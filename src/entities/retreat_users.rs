@@ -10,7 +10,6 @@ pub struct Model {
     pub retreat_user_id: i64,
     pub retreat_id: i64,
     pub user_id: i64,
-    pub is_owner: bool,
     pub role: Option<String>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
