@@ -9,7 +9,7 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, Order,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, TryIntoModel
 };
-
+use sea_orm::sea_query::{Expr, extension::postgres::PgExpr};
 use validator::Validate;
 
 use crate::{
@@ -86,9 +86,10 @@ async fn list_retreats(
 
     if let Some(ref search) = filter.search {
         query = query.filter(
-            RetreatColumn::Name
-                .contains(search)
-                .or(RetreatColumn::Slug.contains(search)),
+            Expr::col(RetreatColumn::Name)
+                .ilike(format!("%{}%", search))
+                .or(Expr::col(RetreatColumn::Slug)
+                    .ilike(format!("%{}%", search))),
         );
     }
 

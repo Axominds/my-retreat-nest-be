@@ -9,6 +9,7 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait,
     QueryFilter, QuerySelect, TryIntoModel,
 };
+use sea_orm::sea_query::{Expr, extension::postgres::PgExpr};
 use validator::Validate;
 
 use crate::{
@@ -60,7 +61,7 @@ async fn list_categories(
     let mut query = CategoryEntity::find();
 
     if let Some(ref search) = filter.search {
-        query = query.filter(CategoryColumn::Name.contains(search));
+        query = query.filter(Expr::col(CategoryColumn::Name).ilike(format!("%{}%", search)));
     }
 
     let total: u64 = query.clone().count(&state.database).await.unwrap();

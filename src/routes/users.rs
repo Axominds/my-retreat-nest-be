@@ -10,6 +10,7 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, Order,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, TryIntoModel,
 };
+use sea_orm::sea_query::{Expr, extension::postgres::PgExpr};
 use validator::Validate;
 
 use crate::{
@@ -74,7 +75,10 @@ async fn list_users(
 
     if let Some(ref search) = filter.search {
         query = query.filter(
-            UserColumn::Name.contains(search).or(UserColumn::Email.contains(search)),
+            Expr::col(UserColumn::Name)
+                .ilike(format!("%{}%", search))
+                .or(Expr::col(UserColumn::Email)
+                    .ilike(format!("%{}%", search))),
         );
     }
 
