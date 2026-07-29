@@ -6,8 +6,8 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, Order,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, TryIntoModel
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ExprTrait, IntoActiveModel,
+    Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, TryIntoModel,
 };
 use sea_orm::sea_query::{Expr, extension::postgres::PgExpr};
 use validator::Validate;

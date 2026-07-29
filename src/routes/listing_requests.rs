@@ -6,10 +6,10 @@ use axum::{
     routing::{get, patch, post},
 };
 use chrono::Utc;
-use rand::Rng;
+use rand::RngExt;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, Order,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, TryIntoModel,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ExprTrait, IntoActiveModel,
+    Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, TryIntoModel,
 };
 use sea_orm::sea_query::{Expr, extension::postgres::PgExpr};
 use validator::Validate;
@@ -40,10 +40,10 @@ use crate::{
 
 fn generate_temp_password() -> String {
     let charset: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     (0..12)
         .map(|_| {
-            let idx = rng.gen_range(0..charset.len());
+            let idx = rng.random_range(0..charset.len());
             charset[idx] as char
         })
         .collect()
