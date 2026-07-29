@@ -20,6 +20,7 @@ pub struct CreateRetreatSerializer {
     pub latitude: Decimal,
     pub longitude: Decimal,
     pub address: Option<String>,
+    pub is_featured: Option<bool>,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -38,6 +39,7 @@ pub struct ReadRetreatSerializer {
     budget_min: Option<Decimal>,
     budget_max: Option<Decimal>,
     is_published: bool,
+    is_featured: bool,
     pub thumbnail_image: Option<String>,
     pub banner_image: Option<String>,
     pub average_rating: Option<f64>,
@@ -60,6 +62,7 @@ impl From<RetreatModel> for ReadRetreatSerializer {
             budget_min: value.budget_min,
             budget_max: value.budget_max,
             is_published: value.is_published,
+            is_featured: value.is_featured,
             thumbnail_image: value.thumbnail_image.map(|_| format!("/retreats/{}/thumbnail/image/", value.retreat_id)),
             banner_image: value.banner_image.map(|_| format!("/retreats/{}/banner/image/", value.retreat_id)),
             average_rating: None,
@@ -90,6 +93,7 @@ pub struct UpdateRetreatSerializer {
     #[serde(default, deserialize_with = "deserialize_some")]
     pub budget_max: Option<Option<Decimal>>,
     pub is_published: Option<bool>,
+    pub is_featured: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Validate)]
@@ -124,6 +128,7 @@ pub struct RetreatFilter {
     pub category_id: Option<i64>,
     pub sort_by: Option<String>,
     pub sort_order: Option<String>,
+    pub is_featured: Option<bool>,
 }
 
 impl Paginate for RetreatFilter {

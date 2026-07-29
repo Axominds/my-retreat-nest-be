@@ -14,6 +14,7 @@ mod m20260718_gallery_category_non_nullable;
 mod m20260718_retreat_category_images;
 mod m20260729_add_retreat_id_to_gallery_categories;
 mod m20260730_make_retreat_fields_required;
+mod m20260729_add_is_featured_to_retreats;
 mod m20260731_create_listing_requests;
 
 pub struct Migrator;
@@ -36,6 +37,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260718_retreat_category_images::Migration),
             Box::new(m20260729_add_retreat_id_to_gallery_categories::Migration),
             Box::new(m20260730_make_retreat_fields_required::Migration),
+            Box::new(m20260729_add_is_featured_to_retreats::Migration),
             Box::new(m20260731_create_listing_requests::Migration),
         ]
     }

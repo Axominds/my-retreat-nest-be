@@ -9,7 +9,8 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ExprTrait, IntoActiveModel,
     Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, TryIntoModel,
 };
-use sea_orm::sea_query::{Expr, extension::postgres::PgExpr};
+use sea_orm::sea_query::{Expr, SimpleExpr, extension::postgres::PgExpr};
+use std::borrow::Cow;
 use validator::Validate;
 
 use crate::{
@@ -97,6 +98,10 @@ async fn list_retreats(
         query = query.filter(RetreatColumn::CategoryId.eq(category_id));
     }
 
+    if let Some(val) = filter.is_featured {
+        query = query.filter(RetreatColumn::IsFeatured.eq(val));
+    }
+
     match filter.sort_by.as_deref() {
         Some("name") => {
             let order = match filter.sort_order.as_deref() {
@@ -112,6 +117,14 @@ async fn list_retreats(
             query = query
                 .order_by(RetreatColumn::IsPublished, Order::Desc)
                 .order_by(RetreatColumn::Name, Order::Asc);
+        }
+        Some("rating") => {
+            query = query.order_by(
+                SimpleExpr::Custom(Cow::Borrowed(
+                    "COALESCE((SELECT AVG(rating) FROM retreat_reviews WHERE retreat_id = retreats.retreat_id), 0)",
+                )),
+                Order::Desc,
+            );
         }
         _ => {
             query = query.order_by(RetreatColumn::RetreatId, Order::Desc);
@@ -227,7 +240,8 @@ async fn update_retreat(
         address,
         budget_min,
         budget_max,
-        is_published
+        is_published,
+        is_featured
     );
 
     // Save the updated Retreat

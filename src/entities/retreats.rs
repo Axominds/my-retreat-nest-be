@@ -25,6 +25,7 @@ pub struct Model {
     pub budget_min: Option<Decimal>,
     pub budget_max: Option<Decimal>,
     pub is_published: bool,
+    pub is_featured: bool,
     #[sea_orm(column_type = "Text", nullable)]
     pub thumbnail_image: Option<String>,
     #[sea_orm(column_type = "Text", nullable)]
