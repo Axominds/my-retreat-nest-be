@@ -23,16 +23,17 @@ pub struct CreateUserSerializer{
 
 #[derive(Serialize, Debug, Clone)]
 pub struct ReadUserSerializer{
-    user_id: i64,
-    name: String,
-    email: String,
-    phone: Option<String>
+    pub user_id: i64,
+    pub name: String,
+    pub email: String,
+    pub phone: Option<String>,
+    pub retreats: Vec<String>
 
 }
 
 impl From<UserModel> for ReadUserSerializer{
     fn from(value: UserModel) -> Self {
-        ReadUserSerializer { user_id: value.user_id, name: value.name, email: value.email, phone: value.phone }
+        ReadUserSerializer { user_id: value.user_id, name: value.name, email: value.email, phone: value.phone, retreats: Vec::new() }
     }
 }
 
@@ -44,6 +45,7 @@ pub struct UserFilter {
     pub search: Option<String>,
     pub sort_by: Option<String>,
     pub sort_order: Option<String>,
+    pub retreat_name: Option<String>,
 }
 
 impl Paginate for UserFilter {

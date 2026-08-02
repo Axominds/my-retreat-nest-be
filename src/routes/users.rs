@@ -14,7 +14,10 @@ use sea_orm::sea_query::{Expr, extension::postgres::PgExpr};
 use validator::Validate;
 
 use crate::{
-    entities_helper::{UserActiveModel, UserColumn, UserEntity, UserModel},
+    entities_helper::{
+        RetreatColumn, RetreatEntity, RetreatModel, RetreatUserColumn, RetreatUserEntity,
+        RetreatUserModel, UserActiveModel, UserColumn, UserEntity, UserModel,
+    },
     serializers::{
         pagination::{Paginate, PaginationMeta},
         users::{CreateUserSerializer, ReadUserSerializer, UpdateUserSerializer, UserFilter},
@@ -82,6 +85,36 @@ async fn list_users(
         );
     }
 
+    if let Some(ref retreat_name) = filter.retreat_name {
+        let retreat_ids: Vec<i64> = RetreatEntity::find()
+            .filter(RetreatColumn::Name.ilike(format!("%{}%", retreat_name)))
+            .all(&state.database)
+            .await
+            .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
+            .into_iter()
+            .map(|model| model.retreat_id)
+            .collect();
+
+        let user_ids: Vec<i64> = if retreat_ids.is_empty() {
+            Vec::new()
+        } else {
+            RetreatUserEntity::find()
+                .filter(RetreatUserColumn::RetreatId.is_in(retreat_ids))
+                .all(&state.database)
+                .await
+                .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
+                .into_iter()
+                .map(|model| model.user_id)
+                .collect()
+        };
+
+        if user_ids.is_empty() {
+            query = query.filter(UserColumn::UserId.eq(-1));
+        } else {
+            query = query.filter(UserColumn::UserId.is_in(user_ids));
+        }
+    }
+
     match filter.sort_by.as_deref() {
         Some("name") => {
             let order = match filter.sort_order.as_deref() {
@@ -103,8 +136,60 @@ async fn list_users(
         .await
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    let serializers: Vec<ReadUserSerializer> =
-        instances.into_iter().map(|model| model.into()).collect();
+    let user_ids: Vec<i64> = instances.iter().map(|model| model.user_id).collect();
+
+    let retreat_user_rows: Vec<RetreatUserModel> = if user_ids.is_empty() {
+        Vec::new()
+    } else {
+        RetreatUserEntity::find()
+            .filter(RetreatUserColumn::UserId.is_in(user_ids.clone()))
+            .all(&state.database)
+            .await
+            .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
+    };
+
+    let retreat_ids: Vec<i64> = retreat_user_rows
+        .iter()
+        .map(|model| model.retreat_id)
+        .collect();
+
+    let retreat_rows: Vec<RetreatModel> = if retreat_ids.is_empty() {
+        Vec::new()
+    } else {
+        RetreatEntity::find()
+            .filter(RetreatColumn::RetreatId.is_in(retreat_ids))
+            .all(&state.database)
+            .await
+            .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
+    };
+
+    let retreat_name_map: std::collections::HashMap<i64, String> = retreat_rows
+        .into_iter()
+        .map(|model| (model.retreat_id, model.name))
+        .collect();
+
+    let mut user_retreat_names: std::collections::HashMap<i64, Vec<String>> =
+        std::collections::HashMap::new();
+    for row in retreat_user_rows {
+        if let Some(name) = retreat_name_map.get(&row.retreat_id) {
+            user_retreat_names
+                .entry(row.user_id)
+                .or_default()
+                .push(name.clone());
+        }
+    }
+
+    let serializers: Vec<ReadUserSerializer> = instances
+        .into_iter()
+        .map(|model| {
+            let mut serializer: ReadUserSerializer = model.into();
+            serializer.retreats = user_retreat_names
+                .get(&serializer.user_id)
+                .cloned()
+                .unwrap_or_default();
+            serializer
+        })
+        .collect();
 
     let pagination_meta = filter.build_meta(total);
     Ok(

@@ -370,8 +370,7 @@ async fn create_retreat_user(
 async fn update_retreat_user(
     State(state): State<AppState>,
     AuthAdmin(_): AuthAdmin,
-    Path(retreat_id): Path<i64>,
-    Path(retreat_user_id): Path<i64>,
+    Path((retreat_id, retreat_user_id)): Path<(i64, i64)>,
     Json(payload): Json<UpdateRetreatUserSerializer>,
 ) -> Result<Response<Body>, Response<Body>> {
     payload
@@ -415,8 +414,7 @@ async fn update_retreat_user(
 async fn delete_retreat_user(
     State(state): State<AppState>,
     AuthAdmin(_): AuthAdmin,
-    Path(retreat_id): Path<i64>,
-    Path(retreat_user_id): Path<i64>,
+    Path((retreat_id, retreat_user_id)): Path<(i64, i64)>,
 ) -> Result<Response<Body>, Response<Body>> {
     // Ensure retreat exists
     RetreatEntity::find()
