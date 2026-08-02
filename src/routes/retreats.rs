@@ -387,9 +387,10 @@ async fn update_retreat_user(
             to_error_response_with_message("Retreat not found.", StatusCode::NOT_FOUND)
         })?;
 
-    // Ensure retreat exists
+    // Ensure the staff member belongs to the retreat
     let instance: RetreatUserModel = RetreatUserEntity::find()
         .filter(RetreatUserColumn::RetreatUserId.eq(retreat_user_id))
+        .filter(RetreatUserColumn::RetreatId.eq(retreat_id))
         .one(&state.database)
         .await
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
@@ -400,9 +401,14 @@ async fn update_retreat_user(
 
     set_fields!(active_model, payload, role);
 
+    active_model
+        .update(&state.database)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
     Ok(CustomResponse::<(), ()>::builder({})
-        .message("Staff added successfully.")
-        .status_code(StatusCode::CREATED)
+        .message("Staff updated successfully.")
+        .status_code(StatusCode::OK)
         .build())
 }
 

@@ -22,7 +22,7 @@ use crate::{
     set_fields,
     state::AppState,
     utils::{
-        extractors::auth::{AuthAdmin, AuthUser},
+        extractors::auth::{AuthAdmin, AuthUserOrAdmin},
         password::create_password,
         response::{CustomResponse, to_error_response, to_error_response_with_message},
     },
@@ -133,13 +133,20 @@ async fn get_user(
 
 async fn update_user(
     State(state): State<AppState>,
-    AuthUser(_): AuthUser,
+    AuthUserOrAdmin(auth): AuthUserOrAdmin,
     Path(user_id): Path<i64>,
     Json(payload): Json<UpdateUserSerializer>,
 ) -> Result<Response<Body>, Response<Body>> {
     payload
         .validate()
         .map_err(|e| to_error_response(e, StatusCode::BAD_REQUEST))?;
+
+    if !auth.is_admin() && auth.user_id() != user_id {
+        return Err(to_error_response_with_message(
+            "You can only update your own profile.",
+            StatusCode::FORBIDDEN,
+        ));
+    }
     // Find existing Retreat
     let instance: UserModel = UserEntity::find()
         .filter(UserColumn::UserId.eq(user_id))

@@ -28,13 +28,16 @@ where
         .get(header::AUTHORIZATION)
         .and_then(|value: &header::HeaderValue| value.to_str().ok())
         .ok_or((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Invalid Header".to_string(),
+            StatusCode::UNAUTHORIZED,
+            "Missing or invalid Authorization header".to_string(),
         ))?;
 
-    let splitted_auth_header: Vec<&str> = auth_header.split(" ").collect();
-
-    let (_schema, access_token) = (splitted_auth_header[0], splitted_auth_header[1]);
+    let access_token: &str = auth_header
+        .strip_prefix("Bearer ")
+        .ok_or((
+            StatusCode::UNAUTHORIZED,
+            "Missing or invalid Authorization header".to_string(),
+        ))?;
 
     let token_claim: TokenClaim = get_access_token_claim(access_token)
         .await
@@ -122,6 +125,77 @@ where
             .ok_or_else(|| (StatusCode::FORBIDDEN, "Admin access revoked".to_string()))?;
 
         Ok(AuthAdmin(user))
+    }
+}
+
+#[derive(Clone)]
+pub enum AuthPrincipal {
+    User(UserModel),
+    Admin(UserModel),
+}
+
+impl AuthPrincipal {
+    pub fn user_id(&self) -> i64 {
+        match self {
+            AuthPrincipal::User(user) | AuthPrincipal::Admin(user) => user.user_id,
+        }
+    }
+
+    pub fn is_admin(&self) -> bool {
+        matches!(self, AuthPrincipal::Admin(_))
+    }
+}
+
+#[derive(Clone)]
+pub struct AuthUserOrAdmin(pub AuthPrincipal);
+
+impl AuthUserOrAdmin {
+    pub fn user_id(&self) -> i64 {
+        self.0.user_id()
+    }
+
+    pub fn is_admin(&self) -> bool {
+        self.0.is_admin()
+    }
+}
+
+impl<S> FromRequestParts<S> for AuthUserOrAdmin
+where
+    S: Send + Sync + std::fmt::Debug + Clone + 'static,
+{
+    type Rejection = (StatusCode, String);
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let (user, claims) = extract_authenticated_user(parts, state).await?;
+
+        match claims.login_type.as_str() {
+            "admin" => {
+                let state: AppState = (state as &dyn Any)
+                    .downcast_ref::<AppState>()
+                    .ok_or_else(|| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "Failed to type cast app state".to_string(),
+                        )
+                    })
+                    .unwrap()
+                    .clone();
+
+                AdminUserEntity::find()
+                    .filter(AdminUserColumn::UserId.eq(user.user_id))
+                    .one(&state.database)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+                    .ok_or_else(|| (StatusCode::FORBIDDEN, "Admin access revoked".to_string()))?;
+
+                Ok(AuthUserOrAdmin(AuthPrincipal::Admin(user)))
+            }
+            "normal" => Ok(AuthUserOrAdmin(AuthPrincipal::User(user))),
+            _ => Err((
+                StatusCode::FORBIDDEN,
+                "User or admin access required".to_string(),
+            )),
+        }
     }
 }
 
