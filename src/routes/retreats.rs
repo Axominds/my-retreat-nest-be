@@ -98,6 +98,23 @@ async fn list_retreats(
         query = query.filter(RetreatColumn::CategoryId.eq(category_id));
     }
 
+    if let Some(min) = filter.budget_min {
+        query = query.filter(RetreatColumn::BudgetMax.gte(min));
+    }
+
+    if let Some(max) = filter.budget_max {
+        query = query.filter(RetreatColumn::BudgetMin.lte(max));
+    }
+
+    if let Some(rating) = filter.rating {
+        query = query.filter(
+            Expr::cust_with_values(
+                "(SELECT AVG(rating) FROM retreat_reviews WHERE retreat_reviews.retreat_id = retreats.retreat_id) >= $1",
+                vec![rating],
+            )
+        );
+    }
+
     if let Some(val) = filter.is_featured {
         query = query.filter(RetreatColumn::IsFeatured.eq(val));
     }
