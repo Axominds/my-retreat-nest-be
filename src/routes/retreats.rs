@@ -7,19 +7,23 @@ use axum::{
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ExprTrait, IntoActiveModel,
-    Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, TryIntoModel,
+    Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, TransactionTrait, TryIntoModel,
 };
 use sea_orm::sea_query::{Expr, SimpleExpr, extension::postgres::PgExpr};
 use std::borrow::Cow;
+use serde::Deserialize;
 use validator::Validate;
 
 use crate::{
     entities_helper::{
-        RetreatActiveModel, RetreatColumn, RetreatEntity, RetreatModel, RetreatReviewColumn,
+        AmenityColumn, AmenityEntity, AmenityModel, RetreatActiveModel,
+        RetreatAmenityActiveModel, RetreatAmenityColumn, RetreatAmenityEntity,
+        RetreatColumn, RetreatEntity, RetreatModel, RetreatReviewColumn,
         RetreatReviewEntity, RetreatUserActiveModel, RetreatUserColumn, RetreatUserEntity,
         RetreatUserModel, UserActiveModel, UserColumn, UserEntity, UserModel,
     },
     serializers::{
+        amenities::ReadAmenitySerializer,
         pagination::{Paginate, PaginationMeta},
         retreats::{
             CreateRetreatSerializer, CreateRetreatUserSerializer, ReadRetreatSerializer,
@@ -30,7 +34,7 @@ use crate::{
     set_active_model_fields, set_fields,
     state::AppState,
     utils::{
-        extractors::auth::AuthAdmin,
+        extractors::auth::{AuthAdmin, AuthAdminOrRetreatUser},
         password::create_password,
         response::{CustomResponse, to_error_response, to_error_response_with_message},
         storage::{self, read_image_with_headers},
@@ -65,10 +69,11 @@ async fn create_retreat(
         .await
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
     // convert to ReadRetreatSerializer serializer
-    let serializer: ReadRetreatSerializer = active_model
+    let saved_retreat: RetreatModel = active_model
         .try_into_model()
-        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
-        .into();
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+    let mut serializer: ReadRetreatSerializer = saved_retreat.into();
+    serializer.amenities = Vec::new();
     Ok(CustomResponse::<ReadRetreatSerializer, ()>::builder(serializer)
         .message("Retreat created successfully.")
         .status_code(StatusCode::CREATED)
@@ -117,6 +122,25 @@ async fn list_retreats(
 
     if let Some(val) = filter.is_featured {
         query = query.filter(RetreatColumn::IsFeatured.eq(val));
+    }
+
+    if let Some(ref amenity_ids_str) = filter.amenity_ids {
+        let ids: Vec<i64> = amenity_ids_str
+            .split(',')
+            .filter_map(|s| s.trim().parse::<i64>().ok())
+            .collect();
+        if !ids.is_empty() {
+            query = query.filter(Expr::cust_with_values(
+                "retreats.retreat_id IN (
+                    SELECT retreat_amenities.retreat_id
+                    FROM retreat_amenities
+                    WHERE retreat_amenities.amenity_id = ANY($1)
+                    GROUP BY retreat_amenities.retreat_id
+                    HAVING COUNT(DISTINCT retreat_amenities.amenity_id) = cardinality($1)
+                )",
+                vec![ids],
+            ));
+        }
     }
 
     match filter.sort_by.as_deref() {
@@ -179,6 +203,10 @@ async fn list_retreats(
         serializer.average_rating = avg_map.get(id).copied();
     }
 
+    for (serializer, id) in serializers.iter_mut().zip(&retreat_ids) {
+        serializer.amenities = load_amenities_for_retreat(&state, *id).await?;
+    }
+
     let total: u64 = query.count(&state.database).await.unwrap();
     let pagination_meta = filter.build_meta(total);
     Ok(CustomResponse::<Vec<ReadRetreatSerializer>, PaginationMeta>::builder(serializers).meta(pagination_meta).build())
@@ -216,6 +244,8 @@ async fn get_retreat(
         let sum: f64 = reviews.iter().map(|r| r.rating).sum();
         serializer.average_rating = Some(sum / reviews.len() as f64);
     }
+
+    serializer.amenities = load_amenities_for_retreat(&state, retreat_id).await?;
 
     Ok(CustomResponse::<ReadRetreatSerializer, ()>::builder(serializer).build())
 }
@@ -268,7 +298,10 @@ async fn update_retreat(
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
     // Convert to serializer
-    let serializer: ReadRetreatSerializer = instance.into();
+    let updated_instance: RetreatModel = instance;
+    let retreat_id = updated_instance.retreat_id;
+    let mut serializer: ReadRetreatSerializer = updated_instance.into();
+    serializer.amenities = load_amenities_for_retreat(&state, retreat_id).await?;
 
     // Return success
     Ok(CustomResponse::<ReadRetreatSerializer, ()>::builder(serializer)
@@ -664,6 +697,93 @@ async fn get_retreat_banner_image(
     Ok(builder.body(Body::from(bytes)).unwrap())
 }
 
+async fn load_amenities_for_retreat(
+    state: &AppState,
+    retreat_id: i64,
+) -> Result<Vec<ReadAmenitySerializer>, Response<Body>> {
+    let joins = RetreatAmenityEntity::find()
+        .filter(RetreatAmenityColumn::RetreatId.eq(retreat_id))
+        .all(&state.database)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    let amenity_ids: Vec<i64> = joins.iter().map(|j| j.amenity_id).collect();
+    if amenity_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let amenities: Vec<AmenityModel> = AmenityEntity::find()
+        .filter(AmenityColumn::AmenityId.is_in(amenity_ids))
+        .all(&state.database)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    Ok(amenities.into_iter().map(|a| a.into()).collect())
+}
+
+#[derive(Deserialize)]
+struct SetRetreatAmenitiesSerializer {
+    amenity_ids: Vec<i64>,
+}
+
+async fn list_retreat_amenities(
+    State(state): State<AppState>,
+    Path(retreat_id): Path<i64>,
+) -> Result<Response<Body>, Response<Body>> {
+    let amenities = load_amenities_for_retreat(&state, retreat_id).await?;
+    Ok(CustomResponse::<Vec<ReadAmenitySerializer>, ()>::builder(amenities).build())
+}
+
+async fn set_retreat_amenities(
+    State(state): State<AppState>,
+    AuthAdminOrRetreatUser(_): AuthAdminOrRetreatUser,
+    Path(retreat_id): Path<i64>,
+    Json(payload): Json<SetRetreatAmenitiesSerializer>,
+) -> Result<Response<Body>, Response<Body>> {
+    RetreatEntity::find()
+        .filter(RetreatColumn::RetreatId.eq(retreat_id))
+        .one(&state.database)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
+        .ok_or_else(|| {
+            to_error_response_with_message("Retreat not found.", StatusCode::NOT_FOUND)
+        })?;
+
+    let txn = state
+        .database
+        .begin()
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    RetreatAmenityEntity::delete_many()
+        .filter(RetreatAmenityColumn::RetreatId.eq(retreat_id))
+        .exec(&txn)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    for amenity_id in &payload.amenity_ids {
+        let active_model: RetreatAmenityActiveModel = RetreatAmenityActiveModel {
+            retreat_id: Set(retreat_id),
+            amenity_id: Set(*amenity_id),
+            ..Default::default()
+        };
+        active_model
+            .insert(&txn)
+            .await
+            .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+    }
+
+    txn.commit()
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    let amenities = load_amenities_for_retreat(&state, retreat_id).await?;
+    Ok(CustomResponse::<Vec<ReadAmenitySerializer>, ()>::builder(amenities)
+        .message("Retreat amenities updated successfully.")
+        .status_code(StatusCode::OK)
+        .build())
+}
+
 pub fn retreat_router() -> Router<AppState> {
     let router = Router::new()
         .route("/retreats/", post(create_retreat))
@@ -680,6 +800,7 @@ pub fn retreat_router() -> Router<AppState> {
             "/retreats/{retreat_id}/users/{retreat_user_id}/",
             delete(delete_retreat_user),
         )
+        .route("/retreats/{retreat_id}/amenities/", get(list_retreat_amenities).put(set_retreat_amenities))
         .route("/retreats/{retreat_id}/thumbnail/", post(upload_retreat_thumbnail))
         .route("/retreats/{retreat_id}/thumbnail/image/", get(get_retreat_thumbnail_image))
         .route("/retreats/{retreat_id}/banner/", post(upload_retreat_banner))

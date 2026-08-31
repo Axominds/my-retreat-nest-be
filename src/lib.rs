@@ -24,6 +24,7 @@ pub async fn run() {
         .merge(routes::auth::auth_router())
         .merge(routes::users::users_router())
         .merge(routes::categories::category_router())
+        .merge(routes::amenities::amenity_router())
         .merge(routes::retreats::retreat_router())
         .merge(routes::retreat_reviews::retreat_review_router())
         .merge(routes::gallery_categories::gallery_category_router())

@@ -25,6 +25,8 @@ pub struct Model {
     pub reviewed_at: Option<DateTimeWithTimeZone>,
     pub rejection_reason: Option<String>,
     pub retreat_id: Option<i64>,
+    #[sea_orm(column_type = "Json", nullable)]
+    pub selected_amenities: Option<Json>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }

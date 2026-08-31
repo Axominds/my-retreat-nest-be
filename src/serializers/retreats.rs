@@ -1,6 +1,6 @@
 use crate::{
     entities_helper::{RetreatModel},
-    serializers::pagination::Paginate,
+    serializers::{amenities::ReadAmenitySerializer, pagination::Paginate},
     utils::serializer::deserialize_some,
 };
 use sea_orm::prelude::Decimal;
@@ -43,6 +43,7 @@ pub struct ReadRetreatSerializer {
     pub thumbnail_image: Option<String>,
     pub banner_image: Option<String>,
     pub average_rating: Option<f64>,
+    pub amenities: Vec<ReadAmenitySerializer>,
 }
 
 impl From<RetreatModel> for ReadRetreatSerializer {
@@ -66,6 +67,7 @@ impl From<RetreatModel> for ReadRetreatSerializer {
             thumbnail_image: value.thumbnail_image.map(|_| format!("/retreats/{}/thumbnail/image/", value.retreat_id)),
             banner_image: value.banner_image.map(|_| format!("/retreats/{}/banner/image/", value.retreat_id)),
             average_rating: None,
+            amenities: Vec::new(),
         }
     }
 }
@@ -132,6 +134,7 @@ pub struct RetreatFilter {
     pub sort_by: Option<String>,
     pub sort_order: Option<String>,
     pub is_featured: Option<bool>,
+    pub amenity_ids: Option<String>,
 }
 
 impl Paginate for RetreatFilter {

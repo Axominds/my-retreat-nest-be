@@ -200,6 +200,63 @@ where
 }
 
 #[derive(Clone)]
+pub struct AuthAdminOrRetreatUser(pub UserModel);
+
+impl<S> FromRequestParts<S> for AuthAdminOrRetreatUser
+where
+    S: Send + Sync + std::fmt::Debug + Clone + 'static,
+{
+    type Rejection = (StatusCode, String);
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let (user, claims) = extract_authenticated_user(parts, state).await?;
+
+        let state: AppState = (state as &dyn Any)
+            .downcast_ref::<AppState>()
+            .ok_or_else(|| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to type cast app state".to_string(),
+                )
+            })
+            .unwrap()
+            .clone();
+
+        match claims.login_type.as_str() {
+            "admin" => {
+                AdminUserEntity::find()
+                    .filter(AdminUserColumn::UserId.eq(user.user_id))
+                    .one(&state.database)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+                    .ok_or_else(|| (StatusCode::FORBIDDEN, "Admin access revoked".to_string()))?;
+            }
+            "retreat" => {
+                RetreatUserEntity::find()
+                    .filter(RetreatUserColumn::UserId.eq(user.user_id))
+                    .one(&state.database)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+                    .ok_or_else(|| {
+                        (
+                            StatusCode::FORBIDDEN,
+                            "Retreat user access revoked".to_string(),
+                        )
+                    })?;
+            }
+            _ => {
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    "Admin or retreat user access required".to_string(),
+                ));
+            }
+        }
+
+        Ok(AuthAdminOrRetreatUser(user))
+    }
+}
+
+#[derive(Clone)]
 pub struct AuthRetreatUser(pub UserModel);
 
 impl<S> FromRequestParts<S> for AuthRetreatUser

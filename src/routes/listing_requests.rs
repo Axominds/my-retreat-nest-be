@@ -16,9 +16,11 @@ use validator::Validate;
 
 use crate::{
     entities_helper::{
-        ListingRequestActiveModel, ListingRequestColumn, ListingRequestEntity,
-        ListingRequestModel, RetreatActiveModel, RetreatColumn, RetreatEntity,
-        RetreatUserActiveModel, UserActiveModel, UserColumn, UserEntity, UserModel,
+        AmenityColumn, AmenityEntity, AmenityModel, ListingRequestActiveModel,
+        ListingRequestColumn, ListingRequestEntity, ListingRequestModel, RetreatActiveModel,
+        RetreatAmenityActiveModel,
+        RetreatColumn, RetreatEntity, RetreatUserActiveModel, UserActiveModel, UserColumn,
+        UserEntity, UserModel,
     },
     serializers::{
         listing_requests::{
@@ -77,6 +79,17 @@ async fn ensure_unique_slug(
     }
 }
 
+fn active_model_with_amenities(
+    mut active_model: ListingRequestActiveModel,
+    selected_amenities: Option<Vec<i64>>,
+) -> ListingRequestActiveModel {
+    if let Some(ids) = selected_amenities {
+        active_model.selected_amenities =
+            Set(Some(serde_json::to_value(ids).unwrap_or_default()));
+    }
+    active_model
+}
+
 async fn create_listing_request(
     State(state): State<AppState>,
     Json(payload): Json<CreateListingRequestSerializer>,
@@ -102,6 +115,11 @@ async fn create_listing_request(
             budget_max,
             social_links,
         });
+
+    let active_model = active_model_with_amenities(
+        active_model,
+        payload.selected_amenities,
+    );
 
     let saved = active_model
         .save(&state.database)
@@ -285,6 +303,28 @@ async fn approve_listing_request(
         .try_into_model()
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
+    let amenity_ids: Vec<i64> = if let Some(ids) = payload.amenity_ids {
+        ids
+    } else {
+        request
+            .selected_amenities
+            .clone()
+            .and_then(|json| serde_json::from_value(json).ok())
+            .unwrap_or_default()
+    };
+
+    for amenity_id in &amenity_ids {
+        let ra_active_model = RetreatAmenityActiveModel {
+            retreat_id: Set(retreat_model.retreat_id),
+            amenity_id: Set(*amenity_id),
+            ..Default::default()
+        };
+        ra_active_model
+            .insert(&state.database)
+            .await
+            .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+    }
+
     let retreat_user_active_model = RetreatUserActiveModel {
         retreat_id: Set(retreat_model.retreat_id),
         user_id: Set(user_id),
@@ -329,7 +369,16 @@ async fn approve_listing_request(
             .await;
     });
 
-    let retreat_serializer: ReadRetreatSerializer = retreat_model.into();
+    let mut retreat_serializer: ReadRetreatSerializer = retreat_model.into();
+
+    if !amenity_ids.is_empty() {
+        let amenities: Vec<AmenityModel> = AmenityEntity::find()
+            .filter(AmenityColumn::AmenityId.is_in(amenity_ids))
+            .all(&state.database)
+            .await
+            .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+        retreat_serializer.amenities = amenities.into_iter().map(|a| a.into()).collect();
+    }
 
     let msg = if is_new_user {
         "Listing approved. Retreat created. Email sent with credentials."
@@ -419,6 +468,9 @@ async fn update_listing_request(
     if let Some(v) = payload.budget_min { active_model.budget_min = Set(Some(v)); }
     if let Some(v) = payload.budget_max { active_model.budget_max = Set(Some(v)); }
     if let Some(v) = payload.social_links { active_model.social_links = Set(v); }
+    if let Some(v) = payload.selected_amenities {
+        active_model.selected_amenities = Set(Some(serde_json::to_value(v).unwrap_or_default()));
+    }
 
     let saved = active_model
         .update(&state.database)

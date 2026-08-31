@@ -24,6 +24,7 @@ pub struct CreateListingRequestSerializer {
     pub budget_min: Option<Decimal>,
     pub budget_max: Option<Decimal>,
     pub social_links: JsonValue,
+    pub selected_amenities: Option<Vec<i64>>,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -48,6 +49,7 @@ pub struct ReadListingRequestSerializer {
     pub reviewed_at: Option<String>,
     pub rejection_reason: Option<String>,
     pub retreat_id: Option<i64>,
+    pub selected_amenities: Option<Vec<i64>>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -75,6 +77,9 @@ impl From<ListingRequestModel> for ReadListingRequestSerializer {
             reviewed_at: value.reviewed_at.map(|d| d.to_string()),
             rejection_reason: value.rejection_reason,
             retreat_id: value.retreat_id,
+            selected_amenities: value.selected_amenities.and_then(|json| {
+                serde_json::from_value(json).unwrap_or_default()
+            }),
             created_at: value.created_at.to_string(),
             updated_at: value.updated_at.to_string(),
         }
@@ -112,6 +117,7 @@ impl Paginate for ListingRequestFilter {
 #[derive(Debug, Clone, Deserialize, Validate)]
 pub struct ApproveListingRequestSerializer {
     pub slug: Option<String>,
+    pub amenity_ids: Option<Vec<i64>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -135,4 +141,5 @@ pub struct UpdateListingRequestSerializer {
     pub budget_min: Option<Decimal>,
     pub budget_max: Option<Decimal>,
     pub social_links: Option<JsonValue>,
+    pub selected_amenities: Option<Vec<i64>>,
 }

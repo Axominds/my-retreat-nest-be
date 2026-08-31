@@ -1,11 +1,13 @@
 #![allow(unused)]
 pub mod admin_users;
+pub mod amenities;
 pub mod categories;
 pub mod gallery_categories;
 pub mod listing_requests;
 pub mod password_reset_tokens;
 pub mod retreat_galleries;
 pub mod retreat_reviews;
+pub mod retreat_amenities;
 pub mod retreat_users;
 pub mod retreats;
 pub mod users;
@@ -14,6 +16,7 @@ pub mod wishlists;
 pub use admin_users::{
     AdminUserActiveModel, AdminUserColumn, AdminUserEntity, AdminUserModel,
 };
+pub use amenities::{AmenityActiveModel, AmenityColumn, AmenityEntity, AmenityModel};
 pub use categories::{CategoryActiveModel, CategoryColumn, CategoryEntity, CategoryModel};
 pub use gallery_categories::{
     GalleryCategoriesActiveModel, GalleryCategoriesColumn, GalleryCategoriesEntity,
@@ -32,6 +35,9 @@ pub use retreat_galleries::{
 };
 pub use retreat_reviews::{
     RetreatReviewActiveModel, RetreatReviewColumn, RetreatReviewEntity, RetreatReviewModel,
+};
+pub use retreat_amenities::{
+    RetreatAmenityActiveModel, RetreatAmenityColumn, RetreatAmenityEntity, RetreatAmenityModel,
 };
 pub use retreat_users::{
     RetreatUserActiveModel, RetreatUserColumn, RetreatUserEntity, RetreatUserModel,

@@ -54,6 +54,8 @@ pub enum Relation {
     RetreatReviews,
     #[sea_orm(has_many = "super::retreat_users::Entity")]
     RetreatUsers,
+    #[sea_orm(has_many = "super::retreat_amenities::Entity")]
+    RetreatAmenities,
     #[sea_orm(
         belongs_to = "super::users::Entity",
         from = "Column::CreatedBy",
@@ -101,6 +103,12 @@ impl Related<super::retreat_reviews::Entity> for Entity {
 impl Related<super::retreat_users::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::RetreatUsers.def()
+    }
+}
+
+impl Related<super::retreat_amenities::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::RetreatAmenities.def()
     }
 }
 
