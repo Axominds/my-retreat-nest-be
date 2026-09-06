@@ -17,6 +17,8 @@ mod m20260730_make_retreat_fields_required;
 mod m20260729_add_is_featured_to_retreats;
 mod m20260731_create_listing_requests;
 mod m20260831_create_amenities;
+mod m20260906_create_newsletter_subscribers;
+mod m20260907_add_user_id_to_newsletter_subscribers;
 
 pub struct Migrator;
 
@@ -41,6 +43,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260729_add_is_featured_to_retreats::Migration),
             Box::new(m20260731_create_listing_requests::Migration),
             Box::new(m20260831_create_amenities::Migration),
+            Box::new(m20260906_create_newsletter_subscribers::Migration),
+            Box::new(m20260907_add_user_id_to_newsletter_subscribers::Migration),
         ]
     }
 }

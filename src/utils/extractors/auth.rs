@@ -91,6 +91,23 @@ where
 }
 
 #[derive(Clone)]
+pub struct OptionalAuthUser(pub Option<UserModel>);
+
+impl<S> FromRequestParts<S> for OptionalAuthUser
+where
+    S: Send + Sync + std::fmt::Debug + Clone + 'static,
+{
+    type Rejection = (StatusCode, String);
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        match AuthUser::from_request_parts(parts, state).await {
+            Ok(AuthUser(user)) => Ok(OptionalAuthUser(Some(user))),
+            Err(_) => Ok(OptionalAuthUser(None)),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct AuthAdmin(pub UserModel);
 
 impl<S> FromRequestParts<S> for AuthAdmin

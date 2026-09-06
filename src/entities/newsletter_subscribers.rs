@@ -3,15 +3,15 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "admin_users")]
+#[sea_orm(table_name = "newsletter_subscribers")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub admin_user_id: i64,
+    pub id: i64,
     #[sea_orm(unique)]
-    pub user_id: i64,
-    pub role: String,
+    pub email: String,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
+    pub user_id: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -21,7 +21,7 @@ pub enum Relation {
         from = "Column::UserId",
         to = "super::users::Column::UserId",
         on_update = "Cascade",
-        on_delete = "Cascade"
+        on_delete = "SetNull"
     )]
     Users,
 }

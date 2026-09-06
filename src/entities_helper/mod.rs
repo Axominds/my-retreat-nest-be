@@ -4,6 +4,7 @@ pub mod amenities;
 pub mod categories;
 pub mod gallery_categories;
 pub mod listing_requests;
+pub mod newsletter_subscribers;
 pub mod password_reset_tokens;
 pub mod retreat_galleries;
 pub mod retreat_reviews;
@@ -24,6 +25,10 @@ pub use gallery_categories::{
 };
 pub use listing_requests::{
     ListingRequestActiveModel, ListingRequestColumn, ListingRequestEntity, ListingRequestModel,
+};
+pub use newsletter_subscribers::{
+    NewsletterSubscriberActiveModel, NewsletterSubscriberColumn, NewsletterSubscriberEntity,
+    NewsletterSubscriberModel,
 };
 pub use password_reset_tokens::{
     PasswordResetTokenActiveModel, PasswordResetTokenColumn, PasswordResetTokenEntity,
