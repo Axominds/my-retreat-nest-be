@@ -4,6 +4,7 @@ pub mod prelude;
 
 pub mod admin_users;
 pub mod amenities;
+pub mod blogs;
 pub mod categories;
 pub mod gallery_categories;
 pub mod listing_requests;
