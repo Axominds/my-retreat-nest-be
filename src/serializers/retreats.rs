@@ -44,6 +44,7 @@ pub struct ReadRetreatSerializer {
     pub banner_image: Option<String>,
     pub average_rating: Option<f64>,
     pub amenities: Vec<ReadAmenitySerializer>,
+    pub distance_km: Option<f64>,
 }
 
 impl From<RetreatModel> for ReadRetreatSerializer {
@@ -68,6 +69,7 @@ impl From<RetreatModel> for ReadRetreatSerializer {
             banner_image: value.banner_image.map(|_| format!("/retreats/{}/banner/image/", value.retreat_id)),
             average_rating: None,
             amenities: Vec::new(),
+            distance_km: None,
         }
     }
 }
@@ -135,6 +137,9 @@ pub struct RetreatFilter {
     pub sort_order: Option<String>,
     pub is_featured: Option<bool>,
     pub amenity_ids: Option<String>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
+    pub radius_km: Option<f64>,
 }
 
 impl Paginate for RetreatFilter {
