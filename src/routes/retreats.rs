@@ -41,6 +41,16 @@ use crate::{
     },
 };
 
+/// Great-circle distance in kilometres between two WGS84 points.
+fn haversine_km(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+    const EARTH_RADIUS_KM: f64 = 6371.0;
+    let dlat = (lat2 - lat1).to_radians();
+    let dlon = (lon2 - lon1).to_radians();
+    let a = (dlat / 2.0).sin().powi(2)
+        + lat1.to_radians().cos() * lat2.to_radians().cos() * (dlon / 2.0).sin().powi(2);
+    EARTH_RADIUS_KM * 2.0 * a.sqrt().asin()
+}
+
 async fn create_retreat(
     State(state): State<AppState>,
     AuthAdmin(_): AuthAdmin,
@@ -84,6 +94,67 @@ async fn list_retreats(
     State(state): State<AppState>,
     Query(filter): Query<RetreatFilter>,
 ) -> Result<Response<Body>, Response<Body>> {
+    // Geo params: radius filter requires the full trio; sort_by=distance
+    // and distance_km only need lat+lng.
+    let geo_filter: Option<(f64, f64, f64)> =
+        match (filter.latitude, filter.longitude, filter.radius_km) {
+            (Some(lat), Some(lng), Some(radius)) => {
+                if !(-90.0..=90.0).contains(&lat) {
+                    return Err(to_error_response_with_message(
+                        "Invalid latitude. Must be between -90 and 90.",
+                        StatusCode::BAD_REQUEST,
+                    ));
+                }
+                if !(-180.0..=180.0).contains(&lng) {
+                    return Err(to_error_response_with_message(
+                        "Invalid longitude. Must be between -180 and 180.",
+                        StatusCode::BAD_REQUEST,
+                    ));
+                }
+                if !(radius > 0.0 && radius <= 20000.0) {
+                    return Err(to_error_response_with_message(
+                        "Invalid radius_km. Must be greater than 0.",
+                        StatusCode::BAD_REQUEST,
+                    ));
+                }
+                Some((lat, lng, radius))
+            }
+            (None, None, None) => None,
+            (Some(lat), Some(lng), None) => {
+                if !(-90.0..=90.0).contains(&lat) {
+                    return Err(to_error_response_with_message(
+                        "Invalid latitude. Must be between -90 and 90.",
+                        StatusCode::BAD_REQUEST,
+                    ));
+                }
+                if !(-180.0..=180.0).contains(&lng) {
+                    return Err(to_error_response_with_message(
+                        "Invalid longitude. Must be between -180 and 180.",
+                        StatusCode::BAD_REQUEST,
+                    ));
+                }
+                None
+            }
+            (None, None, Some(_)) => {
+                return Err(to_error_response_with_message(
+                    "latitude and longitude must be provided together with radius_km.",
+                    StatusCode::BAD_REQUEST,
+                ));
+            }
+            _ => {
+                return Err(to_error_response_with_message(
+                    "latitude and longitude must be provided together.",
+                    StatusCode::BAD_REQUEST,
+                ));
+            }
+        };
+    let geo_center: Option<(f64, f64)> = geo_filter
+        .map(|(lat, lng, _)| (lat, lng))
+        .or_else(|| match (filter.latitude, filter.longitude) {
+            (Some(lat), Some(lng)) => Some((lat, lng)),
+            _ => None,
+        });
+
     let mut query = RetreatEntity::find();
 
     if let Some(val) = filter.is_published {
@@ -143,6 +214,16 @@ async fn list_retreats(
         }
     }
 
+    if let Some((lat, lng, radius)) = geo_filter {
+        query = query.filter(Expr::cust_with_values(
+            "(6371 * acos(least(1.0, greatest(-1.0, \
+                cos(radians($1)) * cos(radians(retreats.latitude::float8)) * \
+                cos(radians(retreats.longitude::float8) - radians($2)) + \
+                sin(radians($1)) * sin(radians(retreats.latitude::float8)))))) <= $3",
+            vec![lat, lng, radius],
+        ));
+    }
+
     match filter.sort_by.as_deref() {
         Some("name") => {
             let order = match filter.sort_order.as_deref() {
@@ -167,8 +248,44 @@ async fn list_retreats(
                 Order::Desc,
             );
         }
+        Some("distance") => {
+            match geo_center {
+                Some((lat, lng)) => {
+                    query = query.order_by(
+                        Expr::cust_with_values(
+                            "(6371 * acos(least(1.0, greatest(-1.0, \
+                                cos(radians($1)) * cos(radians(retreats.latitude::float8)) * \
+                                cos(radians(retreats.longitude::float8) - radians($2)) + \
+                                sin(radians($1)) * sin(radians(retreats.latitude::float8))))))",
+                            vec![lat, lng],
+                        ),
+                        Order::Asc,
+                    );
+                }
+                None => {
+                    return Err(to_error_response_with_message(
+                        "sort_by=distance requires latitude and longitude.",
+                        StatusCode::BAD_REQUEST,
+                    ));
+                }
+            }
+        }
         _ => {
-            query = query.order_by(RetreatColumn::RetreatId, Order::Desc);
+            // Default to closest-first when a radius search is active.
+            if let Some((lat, lng, _)) = geo_filter {
+                query = query.order_by(
+                    Expr::cust_with_values(
+                        "(6371 * acos(least(1.0, greatest(-1.0, \
+                            cos(radians($1)) * cos(radians(retreats.latitude::float8)) * \
+                            cos(radians(retreats.longitude::float8) - radians($2)) + \
+                            sin(radians($1)) * sin(radians(retreats.latitude::float8))))))",
+                        vec![lat, lng],
+                    ),
+                    Order::Asc,
+                );
+            } else {
+                query = query.order_by(RetreatColumn::RetreatId, Order::Desc);
+            }
         }
     }
 
@@ -180,8 +297,23 @@ async fn list_retreats(
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
     let retreat_ids: Vec<i64> = instances.iter().map(|m| m.retreat_id).collect();
+    let distances: Option<Vec<f64>> = geo_center.map(|(lat, lng)| {
+        instances
+            .iter()
+            .map(|m| {
+                let rlat: f64 = m.latitude.to_string().parse().unwrap_or(0.0);
+                let rlng: f64 = m.longitude.to_string().parse().unwrap_or(0.0);
+                haversine_km(lat, lng, rlat, rlng)
+            })
+            .collect()
+    });
     let mut serializers: Vec<ReadRetreatSerializer> =
         instances.into_iter().map(|model| model.into()).collect();
+    if let Some(ds) = distances {
+        for (serializer, d) in serializers.iter_mut().zip(ds) {
+            serializer.distance_km = Some(d);
+        }
+    }
 
     let reviews = RetreatReviewEntity::find()
         .filter(RetreatReviewColumn::RetreatId.is_in(retreat_ids.clone()))
@@ -806,4 +938,27 @@ pub fn retreat_router() -> Router<AppState> {
         .route("/retreats/{retreat_id}/banner/", post(upload_retreat_banner))
         .route("/retreats/{retreat_id}/banner/image/", get(get_retreat_banner_image));
     return router;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::haversine_km;
+
+    #[test]
+    fn same_point_is_zero() {
+        assert!(haversine_km(27.7172, 85.3240, 27.7172, 85.3240) < 1e-6);
+    }
+
+    #[test]
+    fn kathmandu_to_pokhara_is_about_200km() {
+        // Kathmandu (27.7172, 85.3240) -> Pokhara (28.2096, 83.9856)
+        let d = haversine_km(27.7172, 85.3240, 28.2096, 83.9856);
+        assert!((135.0..150.0).contains(&d), "got {d}");
+    }
+
+    #[test]
+    fn antipodal_points_are_half_earth_circumference() {
+        let d = haversine_km(0.0, 0.0, 0.0, 180.0);
+        assert!((20000.0..20040.0).contains(&d), "got {d}");
+    }
 }
