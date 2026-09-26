@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod amenities;
+pub mod blogs;
 pub mod categories;
 pub mod gallery_categories;
 pub mod health;

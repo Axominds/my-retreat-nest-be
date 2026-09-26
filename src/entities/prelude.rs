@@ -2,6 +2,7 @@
 
 pub use super::admin_users::Entity as AdminUsers;
 pub use super::amenities::Entity as Amenities;
+pub use super::blogs::Entity as Blogs;
 pub use super::categories::Entity as Categories;
 pub use super::gallery_categories::Entity as GalleryCategories;
 pub use super::listing_requests::Entity as ListingRequests;

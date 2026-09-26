@@ -1,6 +1,7 @@
 #![allow(unused)]
 pub mod admin_users;
 pub mod amenities;
+pub mod blogs;
 pub mod categories;
 pub mod gallery_categories;
 pub mod listing_requests;
@@ -18,6 +19,7 @@ pub use admin_users::{
     AdminUserActiveModel, AdminUserColumn, AdminUserEntity, AdminUserModel,
 };
 pub use amenities::{AmenityActiveModel, AmenityColumn, AmenityEntity, AmenityModel};
+pub use blogs::{BlogActiveModel, BlogColumn, BlogEntity, BlogModel};
 pub use categories::{CategoryActiveModel, CategoryColumn, CategoryEntity, CategoryModel};
 pub use gallery_categories::{
     GalleryCategoriesActiveModel, GalleryCategoriesColumn, GalleryCategoriesEntity,
