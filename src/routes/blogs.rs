@@ -6,10 +6,10 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ExprTrait, IntoActiveModel,
-    Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, TryIntoModel,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, EntityTrait, ExprTrait,
+    IntoActiveModel, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, TryIntoModel,
 };
-use sea_orm::sea_query::{Expr, extension::postgres::PgExpr};
+use sea_orm::sea_query::{Expr, LikeExpr, extension::postgres::PgExpr};
 use validator::Validate;
 
 use crate::{
@@ -33,6 +33,59 @@ fn slugify(text: &str) -> String {
         .filter(|c| c.is_alphanumeric() || *c == ' ')
         .map(|c| if c == ' ' { '-' } else { c })
         .collect::<String>()
+}
+
+/// Escapes the wildcards of a `LIKE`/`ILIKE` pattern so tag names containing
+/// `%` or `_` are matched literally.
+fn escape_like_pattern(value: &str) -> String {
+    value
+        .replace('\\', r"\\")
+        .replace('%', r"\%")
+        .replace('_', r"\_")
+}
+
+/// Splits a raw comma separated tag list into normalized, de-duplicated tags.
+fn parse_tag_list(raw: &str) -> Vec<String> {
+    let mut parsed: Vec<String> = Vec::new();
+    for part in raw.split(',') {
+        let tag = part.trim().to_lowercase();
+        if tag.is_empty() {
+            continue;
+        }
+        // `Vec::contains` is shadowed by `PgExpr::contains` in this module, so
+        // de-duplicate through an explicit iteration instead.
+        if !parsed.iter().any(|existing| existing == &tag) {
+            parsed.push(tag);
+        }
+    }
+    parsed
+}
+
+/// Builds a case-insensitive condition matching blogs that carry ANY of
+/// `tags`.
+///
+/// `blogs.tags` stores every tag in a single comma separated column, so a plain
+/// `ILIKE '%tag%'` would also match partial words (tag `spa` would wrongly match
+/// `spa-day`). The column is therefore padded with commas on both sides and
+/// whitespace around separators is normalized away, which turns the match into an
+/// exact per-tag comparison.
+fn any_tag_condition(tags: &[String]) -> Option<Condition> {
+    let normalized_tags = Expr::cust(
+        r#"',' || REGEXP_REPLACE(COALESCE("blogs"."tags", ''), '\s*,\s*', ',', 'g') || ','"#,
+    );
+
+    let mut condition = Condition::any();
+    for tag in tags {
+        let pattern = format!("%,{},%", escape_like_pattern(tag));
+        let tag_match = normalized_tags.clone().ilike(LikeExpr::new(pattern));
+        condition = Condition::add(condition, tag_match);
+    }
+
+    if condition.is_empty() {
+        None
+    } else {
+        Some(condition)
+    }
 }
 
 async fn ensure_unique_slug(
@@ -125,8 +178,16 @@ async fn list_blogs(
         );
     }
 
-    if let Some(ref tag) = filter.tag {
-        query = query.filter(Expr::col(BlogColumn::Tags).ilike(format!("%{}%", tag)));
+    if let Some(ref tag) = filter.tag
+        && let Some(condition) = any_tag_condition(&parse_tag_list(tag))
+    {
+        query = query.filter(condition);
+    }
+
+    if let Some(ref tags) = filter.tags
+        && let Some(condition) = any_tag_condition(&parse_tag_list(tags))
+    {
+        query = query.filter(condition);
     }
 
     match filter.sort_by.as_deref() {
@@ -452,3 +513,4 @@ pub fn blog_router() -> Router<AppState> {
         .route("/blogs/{blog_id}/cover/image/", get(get_blog_cover_image));
     return router;
 }
+

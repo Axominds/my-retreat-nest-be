@@ -67,7 +67,11 @@ pub struct BlogFilter {
     pub page_size: Option<u64>,
     pub is_published: Option<bool>,
     pub search: Option<String>,
+    /// Single tag filter, kept for backwards compatibility.
     pub tag: Option<String>,
+    /// Multiple tag filter as a comma separated list. Matches blogs carrying
+    /// ANY of the given tags. Combined with `tag` when both are set.
+    pub tags: Option<String>,
     pub sort_by: Option<String>,
 }
 
