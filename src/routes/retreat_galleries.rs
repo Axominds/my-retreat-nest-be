@@ -25,7 +25,7 @@ use crate::{
     },
     state::AppState,
     utils::{
-        extractors::auth::AuthAdmin,
+        extractors::auth::{AuthAdminOrRetreatUser, ensure_retreat_membership},
         response::{CustomResponse, to_error_response, to_error_response_with_message},
         storage::{
             read_retreat_gallery_with_headers, remove_retreat_gallery, store_retreat_gallery,
@@ -35,7 +35,7 @@ use crate::{
 
 async fn create_retreat_gallery(
     State(state): State<AppState>,
-    AuthAdmin(user): AuthAdmin,
+    AuthAdminOrRetreatUser(principal): AuthAdminOrRetreatUser,
     Path(retreat_id): Path<i64>,
     mut multipart: Multipart,
 ) -> Result<Response<Body>, Response<Body>> {
@@ -48,6 +48,10 @@ async fn create_retreat_gallery(
         .ok_or_else(|| {
             to_error_response_with_message("Retreat not found.", StatusCode::NOT_FOUND)
         })?;
+
+    // Tenant scope: retreat staff may only manage their own retreat's gallery.
+    // Global admins bypass.
+    ensure_retreat_membership(&state.database, &principal, retreat_id).await?;
 
     let mut caption: Option<String> = None;
     let mut image_path: String = "".to_string();
@@ -99,8 +103,8 @@ async fn create_retreat_gallery(
         image_path: Set(image_path),
         retreat_id: Set(retreat_id),
         gallery_category_id: Set(gallery_category_id),
-        created_by: Set(Some(user.user_id)),
-        updated_by: Set(Some(user.user_id)),
+        created_by: Set(Some(principal.user_id())),
+        updated_by: Set(Some(principal.user_id())),
         ..Default::default()
     };
 
@@ -170,7 +174,7 @@ async fn list_retreat_gallery(
 
 async fn update_retreat_gallery(
     State(state): State<AppState>,
-    AuthAdmin(_): AuthAdmin,
+    AuthAdminOrRetreatUser(principal): AuthAdminOrRetreatUser,
     Path((retreat_id, gallery_id)): Path<(i64, i64)>,
     mut multipart: Multipart,
 ) -> Result<Response<Body>, Response<Body>> {
@@ -182,6 +186,10 @@ async fn update_retreat_gallery(
         .ok_or_else(|| {
             to_error_response_with_message("Retreat not found.", StatusCode::NOT_FOUND)
         })?;
+
+    // Tenant scope: retreat staff may only manage their own retreat's gallery.
+    // Global admins bypass.
+    ensure_retreat_membership(&state.database, &principal, retreat_id).await?;
 
     let instance: RetreatGalleriesModel = RetreatGalleriesEntity::find()
         .filter(RetreatGalleriesColumn::GalleryId.eq(gallery_id))
@@ -250,9 +258,12 @@ async fn update_retreat_gallery(
 
 async fn delete_retreat_gallery(
     State(state): State<AppState>,
-    AuthAdmin(_): AuthAdmin,
+    AuthAdminOrRetreatUser(principal): AuthAdminOrRetreatUser,
     Path((retreat_id, gallery_id)): Path<(i64, i64)>,
 ) -> Result<Response<Body>, Response<Body>> {
+    // Tenant scope: retreat staff may only manage their own retreat's gallery.
+    // Global admins bypass.
+    ensure_retreat_membership(&state.database, &principal, retreat_id).await?;
     let instance: RetreatGalleriesModel = RetreatGalleriesEntity::find()
         .filter(RetreatGalleriesColumn::GalleryId.eq(gallery_id))
         .filter(RetreatGalleriesColumn::RetreatId.eq(retreat_id))

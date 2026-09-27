@@ -1,19 +1,24 @@
 use std::any::Any;
 
 use axum::{
+    body::Body,
     extract::FromRequestParts,
     http::{StatusCode, header, request::Parts},
+    response::Response,
 };
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::{
     entities_helper::{
-        AdminUserColumn, AdminUserEntity, RetreatUserColumn, RetreatUserEntity, UserColumn,
-        UserEntity, UserModel,
+        AdminUserColumn, AdminUserEntity, RetreatUserColumn, RetreatUserEntity, RetreatUserModel,
+        UserColumn, UserEntity, UserModel,
     },
     serializers::auth::TokenClaim,
     state::AppState,
-    utils::jwt::get_access_token_claim,
+    utils::{
+        jwt::get_access_token_claim,
+        response::{to_error_response, to_error_response_with_message},
+    },
 };
 
 async fn extract_authenticated_user<S>(
@@ -158,9 +163,64 @@ impl AuthPrincipal {
         }
     }
 
+    pub fn user(&self) -> &UserModel {
+        match self {
+            AuthPrincipal::User(user) | AuthPrincipal::Admin(user) => user,
+        }
+    }
+
     pub fn is_admin(&self) -> bool {
         matches!(self, AuthPrincipal::Admin(_))
     }
+}
+
+/// Enforces per-retreat tenancy for non-admin callers.
+///
+/// Admins bypass and get `Ok(None)`. Retreat users must hold a
+/// `retreat_users` row for `retreat_id`; the row is returned so callers
+/// that need role gating (team management) can inspect `role`.
+/// Unknown/foreign retreat access fails closed with 403.
+pub async fn ensure_retreat_membership(
+    db: &DatabaseConnection,
+    principal: &AuthPrincipal,
+    retreat_id: i64,
+) -> Result<Option<RetreatUserModel>, Response<Body>> {
+    if principal.is_admin() {
+        return Ok(None);
+    }
+    let membership: Option<RetreatUserModel> = RetreatUserEntity::find()
+        .filter(RetreatUserColumn::UserId.eq(principal.user_id()))
+        .filter(RetreatUserColumn::RetreatId.eq(retreat_id))
+        .one(db)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+    match membership {
+        Some(row) => Ok(Some(row)),
+        None => Err(to_error_response_with_message(
+            "You do not have access to this retreat.",
+            StatusCode::FORBIDDEN,
+        )),
+    }
+}
+
+/// Team management (invite / role change / remove) requires owner or
+/// manager role. Pass the membership row from `ensure_retreat_membership`;
+/// `None` (admin bypass) is allowed through.
+pub fn ensure_team_manager(membership: Option<&RetreatUserModel>) -> Result<(), Response<Body>> {
+    if membership.is_none() {
+        return Ok(());
+    }
+    let is_manager: bool = membership
+        .and_then(|m| m.role.as_deref())
+        .map(|role| role.eq_ignore_ascii_case("owner") || role.eq_ignore_ascii_case("manager"))
+        .unwrap_or(false);
+    if is_manager {
+        return Ok(());
+    }
+    Err(to_error_response_with_message(
+        "Only owners or managers can manage team members.",
+        StatusCode::FORBIDDEN,
+    ))
 }
 
 #[derive(Clone)]
@@ -208,6 +268,9 @@ where
                 Ok(AuthUserOrAdmin(AuthPrincipal::Admin(user)))
             }
             "normal" => Ok(AuthUserOrAdmin(AuthPrincipal::User(user))),
+            // Retreat staff manage their own profile with the same self-scope
+            // enforced below (`update_user` allows self-or-admin only).
+            "retreat" => Ok(AuthUserOrAdmin(AuthPrincipal::User(user))),
             _ => Err((
                 StatusCode::FORBIDDEN,
                 "User or admin access required".to_string(),
@@ -217,7 +280,21 @@ where
 }
 
 #[derive(Clone)]
-pub struct AuthAdminOrRetreatUser(pub UserModel);
+pub struct AuthAdminOrRetreatUser(pub AuthPrincipal);
+
+impl AuthAdminOrRetreatUser {
+    pub fn user_id(&self) -> i64 {
+        self.0.user_id()
+    }
+
+    pub fn user(&self) -> &UserModel {
+        self.0.user()
+    }
+
+    pub fn is_admin(&self) -> bool {
+        self.0.is_admin()
+    }
+}
 
 impl<S> FromRequestParts<S> for AuthAdminOrRetreatUser
 where
@@ -247,6 +324,7 @@ where
                     .await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
                     .ok_or_else(|| (StatusCode::FORBIDDEN, "Admin access revoked".to_string()))?;
+                Ok(AuthAdminOrRetreatUser(AuthPrincipal::Admin(user)))
             }
             "retreat" => {
                 RetreatUserEntity::find()
@@ -260,6 +338,7 @@ where
                             "Retreat user access revoked".to_string(),
                         )
                     })?;
+                Ok(AuthAdminOrRetreatUser(AuthPrincipal::User(user)))
             }
             _ => {
                 return Err((
@@ -269,7 +348,9 @@ where
             }
         }
 
-        Ok(AuthAdminOrRetreatUser(user))
+        // NOTE: per-retreat tenancy is NOT enforced here (`FromRequestParts`
+        // cannot see the path `{retreat_id}`). Each CRUD handler calls
+        // `ensure_retreat_membership` with its path id; admins bypass.
     }
 }
 

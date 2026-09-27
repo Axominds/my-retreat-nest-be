@@ -2,7 +2,7 @@ use axum::{
     Json, Router,
     body::Body,
     extract::{Multipart, Path, Query, State},
-    http::{Response, StatusCode},
+    http::{HeaderMap, Response, StatusCode},
     routing::{delete, get, patch, post},
 };
 use sea_orm::{
@@ -22,22 +22,26 @@ use crate::{
         RetreatReviewEntity, RetreatUserActiveModel, RetreatUserColumn, RetreatUserEntity,
         RetreatUserModel, UserActiveModel, UserColumn, UserEntity, UserModel,
     },
+    env::ENV,
     serializers::{
         amenities::ReadAmenitySerializer,
         pagination::{Paginate, PaginationMeta},
         retreats::{
             CreateRetreatSerializer, CreateRetreatUserSerializer, ReadRetreatSerializer,
             ReadRetreatUserSerializer, RetreatFilter, UpdateRetreatSerializer,
-            UpdateRetreatUserSerializer,
+            UpdateRetreatUserSerializer, ValidateRetreatSerializer,
         },
     },
     set_active_model_fields, set_fields,
     state::AppState,
     utils::{
-        extractors::auth::{AuthAdmin, AuthAdminOrRetreatUser},
+        extractors::auth::{
+            AuthAdmin, AuthAdminOrRetreatUser, ensure_retreat_membership, ensure_team_manager,
+        },
         password::create_password,
         response::{CustomResponse, to_error_response, to_error_response_with_message},
         storage::{self, read_image_with_headers},
+        tenant::{TenantResolveError, resolve_tenant_slug},
     },
 };
 
@@ -384,13 +388,16 @@ async fn get_retreat(
 
 async fn update_retreat(
     State(state): State<AppState>,
-    AuthAdmin(_): AuthAdmin,
+    AuthAdminOrRetreatUser(principal): AuthAdminOrRetreatUser,
     Path(retreat_id): Path<i64>,
     Json(payload): Json<UpdateRetreatSerializer>,
 ) -> Result<Response<Body>, Response<Body>> {
     payload
         .validate()
         .map_err(|e| to_error_response(e, StatusCode::BAD_REQUEST))?;
+    // Tenant scope: retreat staff may only edit their own retreat.
+    // Global admins bypass.
+    ensure_retreat_membership(&state.database, &principal, retreat_id).await?;
     // Find existing Retreat
     let instance = RetreatEntity::find()
         .filter(RetreatColumn::RetreatId.eq(retreat_id))
@@ -474,7 +481,7 @@ async fn delete_retreat(
 
 async fn create_retreat_user(
     State(state): State<AppState>,
-    AuthAdmin(_): AuthAdmin,
+    AuthAdminOrRetreatUser(principal): AuthAdminOrRetreatUser,
     Path(retreat_id): Path<i64>,
     Json(payload): Json<CreateRetreatUserSerializer>,
 ) -> Result<Response<Body>, Response<Body>> {
@@ -487,6 +494,12 @@ async fn create_retreat_user(
         .ok_or_else(|| {
             to_error_response_with_message("Retreat not found.", StatusCode::NOT_FOUND)
         })?;
+
+    // Tenant scope: only members of this retreat (owner/manager) may invite.
+    // Global admins bypass.
+    let membership =
+        ensure_retreat_membership(&state.database, &principal, retreat_id).await?;
+    ensure_team_manager(membership.as_ref())?;
 
     // Check if user exists
     let user = UserEntity::find()
@@ -551,7 +564,7 @@ async fn create_retreat_user(
 
 async fn update_retreat_user(
     State(state): State<AppState>,
-    AuthAdmin(_): AuthAdmin,
+    AuthAdminOrRetreatUser(principal): AuthAdminOrRetreatUser,
     Path((retreat_id, retreat_user_id)): Path<(i64, i64)>,
     Json(payload): Json<UpdateRetreatUserSerializer>,
 ) -> Result<Response<Body>, Response<Body>> {
@@ -567,6 +580,12 @@ async fn update_retreat_user(
         .ok_or_else(|| {
             to_error_response_with_message("Retreat not found.", StatusCode::NOT_FOUND)
         })?;
+
+    // Tenant scope: only members of this retreat (owner/manager) may change roles.
+    // Global admins bypass.
+    let membership =
+        ensure_retreat_membership(&state.database, &principal, retreat_id).await?;
+    ensure_team_manager(membership.as_ref())?;
 
     // Ensure the staff member belongs to the retreat
     let instance: RetreatUserModel = RetreatUserEntity::find()
@@ -595,7 +614,7 @@ async fn update_retreat_user(
 
 async fn delete_retreat_user(
     State(state): State<AppState>,
-    AuthAdmin(_): AuthAdmin,
+    AuthAdminOrRetreatUser(principal): AuthAdminOrRetreatUser,
     Path((retreat_id, retreat_user_id)): Path<(i64, i64)>,
 ) -> Result<Response<Body>, Response<Body>> {
     // Ensure retreat exists
@@ -607,6 +626,12 @@ async fn delete_retreat_user(
         .ok_or_else(|| {
             to_error_response_with_message("Retreat not found.", StatusCode::NOT_FOUND)
         })?;
+
+    // Tenant scope: only members of this retreat (owner/manager) may remove staff.
+    // Global admins bypass.
+    let membership =
+        ensure_retreat_membership(&state.database, &principal, retreat_id).await?;
+    ensure_team_manager(membership.as_ref())?;
 
     // Ensure retreat exists
     let instance: RetreatUserModel = RetreatUserEntity::find()
@@ -633,9 +658,12 @@ async fn delete_retreat_user(
 
 async fn list_retreat_users(
     State(state): State<AppState>,
-    AuthAdmin(_): AuthAdmin,
+    AuthAdminOrRetreatUser(principal): AuthAdminOrRetreatUser,
     Path(retreat_id): Path<i64>,
 ) -> Result<Response<Body>, Response<Body>> {
+    // Tenant scope: only members of this retreat may view the team.
+    // Global admins bypass.
+    ensure_retreat_membership(&state.database, &principal, retreat_id).await?;
     let retreat_users: Vec<RetreatUserModel> = RetreatUserEntity::find()
         .filter(RetreatUserColumn::RetreatId.eq(retreat_id))
         .all(&state.database)
@@ -673,10 +701,13 @@ async fn list_retreat_users(
 
 async fn upload_retreat_thumbnail(
     State(state): State<AppState>,
-    AuthAdmin(user): AuthAdmin,
+    AuthAdminOrRetreatUser(principal): AuthAdminOrRetreatUser,
     Path(retreat_id): Path<i64>,
     mut multipart: Multipart,
 ) -> Result<Response<Body>, Response<Body>> {
+    // Tenant scope: retreat staff may only manage their own retreat's images.
+    // Global admins bypass.
+    ensure_retreat_membership(&state.database, &principal, retreat_id).await?;
     let instance = RetreatEntity::find()
         .filter(RetreatColumn::RetreatId.eq(retreat_id))
         .one(&state.database)
@@ -709,7 +740,7 @@ async fn upload_retreat_thumbnail(
 
     let mut active_model: RetreatActiveModel = instance.into_active_model();
     active_model.thumbnail_image = Set(Some(image_path));
-    active_model.updated_by = Set(Some(user.user_id));
+    active_model.updated_by = Set(Some(principal.user_id()));
 
     let instance = active_model
         .update(&state.database)
@@ -724,10 +755,13 @@ async fn upload_retreat_thumbnail(
 
 async fn upload_retreat_banner(
     State(state): State<AppState>,
-    AuthAdmin(user): AuthAdmin,
+    AuthAdminOrRetreatUser(principal): AuthAdminOrRetreatUser,
     Path(retreat_id): Path<i64>,
     mut multipart: Multipart,
 ) -> Result<Response<Body>, Response<Body>> {
+    // Tenant scope: retreat staff may only manage their own retreat's images.
+    // Global admins bypass.
+    ensure_retreat_membership(&state.database, &principal, retreat_id).await?;
     let instance = RetreatEntity::find()
         .filter(RetreatColumn::RetreatId.eq(retreat_id))
         .one(&state.database)
@@ -760,7 +794,7 @@ async fn upload_retreat_banner(
 
     let mut active_model: RetreatActiveModel = instance.into_active_model();
     active_model.banner_image = Set(Some(image_path));
-    active_model.updated_by = Set(Some(user.user_id));
+    active_model.updated_by = Set(Some(principal.user_id()));
 
     let instance = active_model
         .update(&state.database)
@@ -868,7 +902,7 @@ async fn list_retreat_amenities(
 
 async fn set_retreat_amenities(
     State(state): State<AppState>,
-    AuthAdminOrRetreatUser(_): AuthAdminOrRetreatUser,
+    AuthAdminOrRetreatUser(principal): AuthAdminOrRetreatUser,
     Path(retreat_id): Path<i64>,
     Json(payload): Json<SetRetreatAmenitiesSerializer>,
 ) -> Result<Response<Body>, Response<Body>> {
@@ -880,6 +914,10 @@ async fn set_retreat_amenities(
         .ok_or_else(|| {
             to_error_response_with_message("Retreat not found.", StatusCode::NOT_FOUND)
         })?;
+
+    // Tenant scope: retreat staff may only manage their own retreat's amenities.
+    // Global admins bypass. (Previously any retreat user could edit any retreat.)
+    ensure_retreat_membership(&state.database, &principal, retreat_id).await?;
 
     let txn = state
         .database
@@ -916,8 +954,49 @@ async fn set_retreat_amenities(
         .build())
 }
 
+async fn validate_retreat(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Response<Body>, Response<Body>> {
+    let slug: String = match resolve_tenant_slug(&headers, &ENV.root_domain) {
+        Ok(slug) => slug,
+        Err(TenantResolveError::NonTenant) => {
+            return Err(to_error_response_with_message(
+                "Retreat not found.",
+                StatusCode::NOT_FOUND,
+            ));
+        }
+        Err(TenantResolveError::Missing) => {
+            return Err(to_error_response_with_message(
+                "Missing tenant host information.",
+                StatusCode::BAD_REQUEST,
+            ));
+        }
+        Err(TenantResolveError::Invalid) => {
+            return Err(to_error_response_with_message(
+                "Invalid tenant host.",
+                StatusCode::BAD_REQUEST,
+            ));
+        }
+    };
+
+    let instance = RetreatEntity::find()
+        .filter(RetreatColumn::Slug.eq(slug))
+        .filter(RetreatColumn::IsPublished.eq(true))
+        .one(&state.database)
+        .await
+        .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
+        .ok_or_else(|| {
+            to_error_response_with_message("Retreat not found.", StatusCode::NOT_FOUND)
+        })?;
+
+    let serializer: ValidateRetreatSerializer = instance.into();
+    Ok(CustomResponse::<ValidateRetreatSerializer, ()>::builder(serializer).build())
+}
+
 pub fn retreat_router() -> Router<AppState> {
     let router = Router::new()
+        .route("/retreats/validate/", get(validate_retreat))
         .route("/retreats/", post(create_retreat))
         .route("/retreats/", get(list_retreats))
         .route("/retreats/{retreat_id}/", get(get_retreat))

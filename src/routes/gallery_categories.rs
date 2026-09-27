@@ -25,14 +25,14 @@ use crate::{
     set_active_model_fields, set_fields,
     state::AppState,
     utils::{
-        extractors::auth::AuthAdmin,
+        extractors::auth::{AuthAdminOrRetreatUser, ensure_retreat_membership},
         response::{CustomResponse, to_error_response, to_error_response_with_message},
     },
 };
 
 async fn create_gallery_category(
     State(state): State<AppState>,
-    AuthAdmin(user): AuthAdmin,
+    AuthAdminOrRetreatUser(principal): AuthAdminOrRetreatUser,
     Path(retreat_id): Path<i64>,
     Json(payload): Json<CreateGalleryCategorySerializer>,
 ) -> Result<Response<Body>, Response<Body>> {
@@ -47,12 +47,16 @@ async fn create_gallery_category(
         .map_err(|e| to_error_response(e, StatusCode::INTERNAL_SERVER_ERROR))?
         .ok_or_else(|| to_error_response_with_message("Retreat not found.", StatusCode::NOT_FOUND))?;
 
+    // Tenant scope: retreat staff may only manage their own retreat's categories.
+    // Global admins bypass.
+    ensure_retreat_membership(&state.database, &principal, retreat_id).await?;
+
     let mut active_model: GalleryCategoriesActiveModel = set_active_model_fields!(payload, GalleryCategoriesActiveModel, {
         name,
     });
     active_model.retreat_id = Set(retreat_id);
-    active_model.created_by = Set(Some(user.user_id));
-    active_model.updated_by = Set(Some(user.user_id));
+    active_model.created_by = Set(Some(principal.user_id()));
+    active_model.updated_by = Set(Some(principal.user_id()));
 
     let active_model: GalleryCategoriesActiveModel = active_model
         .save(&state.database)
@@ -85,13 +89,17 @@ async fn list_gallery_category(
 
 async fn update_gallery_category(
     State(state): State<AppState>,
-    AuthAdmin(user): AuthAdmin,
+    AuthAdminOrRetreatUser(principal): AuthAdminOrRetreatUser,
     Path((retreat_id, gallery_category_id)): Path<(i64, i64)>,
     Json(payload): Json<UpdateGalleryCategorySerializer>,
 ) -> Result<Response<Body>, Response<Body>> {
     payload
         .validate()
         .map_err(|e| to_error_response(e, StatusCode::BAD_REQUEST))?;
+
+    // Tenant scope: retreat staff may only manage their own retreat's categories.
+    // Global admins bypass.
+    ensure_retreat_membership(&state.database, &principal, retreat_id).await?;
 
     let instance: GalleryCategoriesModel = GalleryCategoriesEntity::find()
         .filter(GalleryCategoriesColumn::GalleryCategoryId.eq(gallery_category_id))
@@ -107,7 +115,7 @@ async fn update_gallery_category(
 
     set_fields!(active_model, payload, name);
 
-    active_model.updated_by = Set(Some(user.user_id));
+    active_model.updated_by = Set(Some(principal.user_id()));
 
     let instance: GalleryCategoriesModel = active_model
         .update(&state.database)
@@ -121,9 +129,12 @@ async fn update_gallery_category(
 
 async fn delete_gallery_category(
     State(state): State<AppState>,
-    AuthAdmin(_): AuthAdmin,
+    AuthAdminOrRetreatUser(principal): AuthAdminOrRetreatUser,
     Path((retreat_id, gallery_category_id)): Path<(i64, i64)>,
 ) -> Result<Response<Body>, Response<Body>> {
+    // Tenant scope: retreat staff may only manage their own retreat's categories.
+    // Global admins bypass.
+    ensure_retreat_membership(&state.database, &principal, retreat_id).await?;
     let instance: GalleryCategoriesModel = GalleryCategoriesEntity::find()
         .filter(GalleryCategoriesColumn::GalleryCategoryId.eq(gallery_category_id))
         .filter(GalleryCategoriesColumn::RetreatId.eq(retreat_id))

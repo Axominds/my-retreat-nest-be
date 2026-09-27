@@ -123,6 +123,23 @@ pub struct ReadRetreatUserSerializer {
     pub role: Option<String>,
 }
 
+#[derive(Serialize, Debug, Clone)]
+pub struct ValidateRetreatSerializer {
+    pub retreat_id: i64,
+    pub slug: String,
+    pub name: String,
+}
+
+impl From<RetreatModel> for ValidateRetreatSerializer {
+    fn from(value: RetreatModel) -> Self {
+        ValidateRetreatSerializer {
+            retreat_id: value.retreat_id,
+            slug: value.slug,
+            name: value.name,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct RetreatFilter {
     pub page: Option<u64>,

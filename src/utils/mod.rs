@@ -7,3 +7,4 @@ pub mod password;
 pub mod response;
 pub mod serializer;
 pub mod storage;
+pub mod tenant;

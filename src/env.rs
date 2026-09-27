@@ -16,6 +16,22 @@ pub struct Env {
     pub smtp_username: String,
     pub smtp_password: String,
     pub app_url: String,
+    pub root_domain: String,
+}
+
+/// Extracts the bare host from an app URL (strips scheme, port, path).
+fn root_domain_from_app_url(app_url: &str) -> String {
+    let without_scheme: &str = app_url
+        .split_once("://")
+        .map(|(_, rest)| rest)
+        .unwrap_or(app_url);
+    let host: &str = without_scheme
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or(without_scheme);
+    let host: &str = host.split('@').next_back().unwrap_or(host);
+    let host: &str = host.split(':').next().unwrap_or(host);
+    host.trim().trim_end_matches('.').to_lowercase()
 }
 
 impl Env {
@@ -50,6 +66,20 @@ impl Env {
             smtp_username: env::var("SMTP_USERNAME").expect("SMTP_USERNAME not set"),
             smtp_password: env::var("SMTP_PASSWORD").expect("SMTP_PASSWORD not set"),
             app_url: env::var("APP_URL").expect("APP_URL not set"),
+            root_domain: {
+                let explicit: Option<String> = env::var("ROOT_DOMAIN")
+                    .ok()
+                    .map(|v| v.trim().to_lowercase())
+                    .filter(|v| !v.is_empty());
+                match explicit {
+                    Some(domain) => domain,
+                    None => {
+                        let app_url: String =
+                            env::var("APP_URL").expect("APP_URL not set");
+                        root_domain_from_app_url(&app_url)
+                    }
+                }
+            },
         }
     }
 }
