@@ -20,6 +20,7 @@ mod m20260831_create_amenities;
 mod m20260906_create_newsletter_subscribers;
 mod m20260907_add_user_id_to_newsletter_subscribers;
 mod m20260926_create_blogs;
+mod m20260927_create_retreat_offerings;
 
 pub struct Migrator;
 
@@ -47,6 +48,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260906_create_newsletter_subscribers::Migration),
             Box::new(m20260907_add_user_id_to_newsletter_subscribers::Migration),
             Box::new(m20260926_create_blogs::Migration),
+            Box::new(m20260927_create_retreat_offerings::Migration),
         ]
     }
 }

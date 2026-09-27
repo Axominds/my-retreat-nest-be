@@ -30,6 +30,8 @@ pub async fn run() {
         .merge(routes::retreat_reviews::retreat_review_router())
         .merge(routes::gallery_categories::gallery_category_router())
         .merge(routes::retreat_galleries::retreat_gallery_router())
+        .merge(routes::retreat_room_types::room_type_router())
+        .merge(routes::retreat_packages::package_router())
         .merge(routes::wishlists::wishlist_router())
         .merge(routes::listing_requests::listing_request_router())
         .merge(routes::newsletter_subscribers::newsletter_subscriber_router())

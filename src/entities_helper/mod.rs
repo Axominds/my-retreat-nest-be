@@ -10,6 +10,8 @@ pub mod password_reset_tokens;
 pub mod retreat_galleries;
 pub mod retreat_reviews;
 pub mod retreat_amenities;
+pub mod retreat_packages;
+pub mod retreat_room_types;
 pub mod retreat_users;
 pub mod retreats;
 pub mod users;
@@ -45,6 +47,14 @@ pub use retreat_reviews::{
 };
 pub use retreat_amenities::{
     RetreatAmenityActiveModel, RetreatAmenityColumn, RetreatAmenityEntity, RetreatAmenityModel,
+};
+pub use retreat_packages::{
+    RetreatPackagesActiveModel, RetreatPackagesColumn, RetreatPackagesEntity,
+    RetreatPackagesModel,
+};
+pub use retreat_room_types::{
+    RetreatRoomTypesActiveModel, RetreatRoomTypesColumn, RetreatRoomTypesEntity,
+    RetreatRoomTypesModel,
 };
 pub use retreat_users::{
     RetreatUserActiveModel, RetreatUserColumn, RetreatUserEntity, RetreatUserModel,
