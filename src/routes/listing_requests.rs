@@ -278,6 +278,7 @@ async fn approve_listing_request(
     let retreat_active_model = RetreatActiveModel {
         name: Set(request.retreat_name.clone()),
         description: Set(request.retreat_description.clone()),
+        story: Set(request.retreat_description.clone()),
         category_id: Set(request.category_id),
         slug: Set(slug),
         social_links: Set(request.social_links.clone()),

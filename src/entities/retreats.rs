@@ -10,6 +10,8 @@ pub struct Model {
     pub name: String,
     #[sea_orm(column_type = "Text", nullable)]
     pub description: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub story: Option<String>,
     pub category_id: i64,
     #[sea_orm(unique)]
     pub slug: String,

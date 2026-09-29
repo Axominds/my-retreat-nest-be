@@ -12,6 +12,7 @@ use validator::Validate;
 pub struct CreateRetreatSerializer {
     pub name: String,
     pub description: Option<String>,
+    pub story: Option<String>,
     pub category_id: i64,
     pub slug: String,
     pub social_links: JsonValue,
@@ -28,6 +29,7 @@ pub struct ReadRetreatSerializer {
     retreat_id: i64,
     name: String,
     description: Option<String>,
+    story: Option<String>,
     category_id: i64,
     slug: String,
     social_links: JsonValue,
@@ -53,6 +55,7 @@ impl From<RetreatModel> for ReadRetreatSerializer {
             retreat_id: value.retreat_id,
             name: value.name,
             description: value.description,
+            story: value.story,
             category_id: value.category_id,
             slug: value.slug,
             social_links: value.social_links,
@@ -79,6 +82,8 @@ pub struct UpdateRetreatSerializer {
     pub name: Option<String>,
     #[serde(default, deserialize_with = "deserialize_some")]
     pub description: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_some")]
+    pub story: Option<Option<String>>,
     pub category_id: Option<i64>,
     pub slug: Option<String>,
     pub social_links: Option<JsonValue>,

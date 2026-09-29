@@ -67,6 +67,7 @@ async fn create_retreat(
     let active_model: RetreatActiveModel = set_active_model_fields!(payload, RetreatActiveModel, {
         name,
         description,
+        story,
         category_id,
         slug,
         social_links,
@@ -416,6 +417,7 @@ async fn update_retreat(
         payload,
         name,
         description,
+        story,
         category_id,
         slug,
         social_links,
